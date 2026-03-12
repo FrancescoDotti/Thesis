@@ -1,0 +1,315 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\newcommand{\paper}[7]{%
+  \section*{#1 (#2)}              % 1 = Authors, 2 = Year
+  \textbf{Full reference:} #3    % 3 = Full citation \\
+  
+  \medskip
+  \textbf{Link / DOI:} #4        % 4 = URL or DOI
+
+  \medskip
+  \textbf{Category:} #5          % 5 = e.g. Core method / Noise / US–EU / etc.
+
+  \medskip
+  \textbf{Main question:}
+  \begin{itemize}[leftmargin=*]
+    \item #6                    % 6 = 1–3 sentences summary of question/findings
+  \end{itemize}
+
+  \textbf{Use for my thesis:}
+  \begin{itemize}[leftmargin=*]
+    \item #7                    % 7 = how you will use/cite it
+  \end{itemize}
+
+  \bigskip\hrule\bigskip
+}
+
+\begin{document}
+\title{Reading Log for Thesis Bibliography}
+\author{Your Name}
+\date{\today}
+\maketitle
+
+\section{WIP List}
+Use it as a checklist: each block should have at least a few papers in your final bibliography, and one or two blocks can be where you aim to contribute
+
+\section{Core methodological foundations}
+
+\subsection{Return variance decomposition and price informativeness}
+
+\begin{itemize}
+  \item \textbf{Brogaard, Nguyen, Putnins \& Wu (2022), ``What Moves Stock Prices? The Roles of News, Noise, and Information'', \emph{Review of Financial Studies}.}\\
+  Benchmark paper and main methodology. 
+
+  \item \textbf{Beveridge \& Nelson (1981), ``A new approach to decomposition of economic time series into permanent and transitory components with particular attention to measurement of the `business cycle''', \emph{Journal of Monetary Economics}.}\\
+  Permanent--transitory decomposition underlying Brogaard's information/noise split.
+
+  \item \textbf{Hasbrouck (1991a), ``Measuring the information content of stock trades'', \emph{Journal of Finance}.}
+  \item \textbf{Hasbrouck (1991b), ``The summary informativeness of stock trades'', \emph{Review of Financial Studies}.}
+  \item \textbf{Hasbrouck (1993), ``Assessing the quality of a security market: A new approach to transaction-cost measurement'', \emph{Review of Financial Studies}.}\\
+  Intraday information/noise decomposition and trade-based measures; microstructure foundation for using order flow as an information proxy.
+
+  \item \textbf{Campbell \& Shiller (1988a, 1988b), ``The dividend-price ratio and expectations of future dividends and discount factors'', \emph{Review of Financial Studies}; ``Stock prices, earnings, and expected dividends'', \emph{Journal of Finance}.}
+  \item \textbf{Campbell (1991), ``A variance decomposition for stock returns'', \emph{Economic Journal}.}\\
+  Classic cash-flow vs discount-rate decompositions of stock returns; complements Brogaard's information partition.
+
+  \item \textbf{Chen \& Zhao (2009), ``Return decomposition'', \emph{Review of Financial Studies}.}
+  \item \textbf{Chen, Da \& Zhao (2013), ``What drives stock price movements?'', \emph{Review of Financial Studies}.}\\
+  Alternative decompositions of return variance; useful for positioning your contribution.
+
+  \item \textbf{Roll (1988), ``R\textsuperscript{2}'', \emph{Journal of Finance}.}
+  \item \textbf{Morck, Yeung \& Yu (2000), ``The information content of stock markets: Why do emerging markets have synchronous stock price movements?'', \emph{Journal of Financial Economics}.}
+  \item \textbf{Morck, Yeung \& Yu (2013), ``R\textsuperscript{2} and the economy'', \emph{Annual Review of Financial Economics}.}\\
+  R\textsuperscript{2}-based synchronicity as a measure of market- vs firm-level information; Brogaard explicitly critiques and refines this.\\
+  When information gathering and processing is costly suppliers of information are more incentivized to produce information useful for estimating the value of many firms (economies of scale) as opposed to specific firms. In these markets investors tend to trade en masse on the basis of the same info about the same subset of stocks, increasing synchronicity.\\
+  It suggests that firm-specific info enters into prices through informed arbitrageurs (institutions like hedge founds) more than through public news/analysts.\\
+  A lot of talks abt Shumpeterian C-D and what drives it and how noise trading can affect it in unclear and asymmetical ways.\\
+  \textit{Could be used when talking about what is firm-specific info, especially in section 3 there are  many other bibliographical references + theories abt stock synchronicity}
+
+  \item \textbf{Jin \& Myers (2006), ``R\textsuperscript{2} around the world: New theory and new tests'', \emph{Journal of Financial Economics}.}\\
+  Theoretical link between synchronicity, opacity, and governance; important for cross-country and institutional interpretation.
+\end{itemize}
+
+\subsection{Time-series / VAR / structural VAR}
+
+\begin{itemize}
+  \item \textbf{L\"utkepohl (2005), \emph{New Introduction to Multiple Time Series Analysis}.}\\
+  Main reference for VARs, MA representations, structural identification, and the algebra behind the decomposition formulas.
+
+  \item \textbf{Hamilton (1994), \emph{Time Series Analysis}.}\\
+  General reference; useful for unit roots, cointegration, and VAR estimation diagnostics.
+
+  \item \textbf{Sims (1980), ``Macroeconomics and reality'', \emph{Econometrica}.}\\
+  Critique of big macro-models of the time, used both in academic and in policy analysis. Foundational paper on VARs and impulse-response analysis.
+
+  \item \textbf{Blanchard \& Quah (1989), ``The dynamic effects of aggregate demand and supply disturbances'', \emph{American Economic Review}.}\\
+  Classic long-run identification in SVARs; conceptually close to using long-run effects \(\theta\) to interpret information shocks.
+\end{itemize}
+
+\bigskip
+\hrule
+\bigskip
+
+\section{Market efficiency, price informativeness, and information in prices}
+
+\subsection{Global and US-focused price informativeness}
+
+\begin{itemize}
+  \item \textbf{Dim, Sangiorgi \& Vilkov (2023), ``Media Narratives and Price Informativeness'', working paper.}\\
+  Shows theoretically and empirically that higher stock exposure to media-narrative attention is associated with lower price informativeness about future fundamentals and higher idiosyncratic variance.\\
+  Uses the same framework as my paper and contains a good literature review on topics of prices and reaction to news or similar outlets of information.\\
+  \textit{Could be used when talking about the role of media and narratives in price informativeness, and also for the literature review on the topic.}\\ 
+  \textit{These is also a detailed explanation of methodology and dataset utilized, with further info in the appendix}.
+
+  \item \textbf{Larsen \& Thorsrud (2022), ``Asset returns, news topics, and media effects'', \emph{The Scandinavian Journal of Economics}.}\\
+  Uses topic-model-based news measures and finds that media content has persistent predictive power for returns; evidence from an exogenous media strike (event-study) supports a causal information-intermediary role of mass media in asset pricing.\\
+  \textit{Could be used to support the channel from media information to prices + the fact that it takes time for the information to get priced in.\\ 
+  Interesting event-study helps quantify the effect of info on prices}
+
+  \item \textbf{Boudoukh, Feldman, Kogan \& Richardson (2013), ``Which News Moves Stock Prices? A Textual Analysis'', NBER Working Paper No. 18725.}\\
+  Uses textual analysis to identify relevant news by type and tone, and finds a much stronger link between news and stock-price movements than in earlier evidence (including a direct re-examination of Roll's R\textsuperscript{2} result).\\
+  \textit{Could be important bc it constitutes a breaking point compared to previous literature, reversing the conlusions of Roll (1998) that there is no difference in noise and info levels in days with news VS days without news.}\\
+
+  \item \textbf{Bai, Philippon \& Savov (2016), ``Have financial markets become more informative?'', \emph{Journal of Financial Economics}.}\\
+  Links firm-specific information in prices to capital allocation efficiency, over different time horizons. Prices are more efficient over higher time horizons (3-5 years). Asks the question: "how do stock prices affects firms investment decisions? And how does this investment decisions subsequently affect future earnings?"
+
+  \item \textbf{Farboodi, Matray, Veldkamp \& Venkateswaran (2021), ``Where has all the data gone?'', \emph{Review of Financial Studies}.}\\
+  Structural model to measure price information. Based on \textit{Bai, Philippon \& Savov (2016)} but decomposes their price informativeness index into a volatility, growth and info components. Concludes that the biggest rise in efficiency in prices has happened in large growth stocks because the value of information is higher for these firms (informed traders can take bigger positions).
+  Results suggesting that prices might get better at aggregating mkt info but less clear abt firm-specific cash flow risk.\\
+  Gives a review of the most common information measures for asset prices.\\
+  They write "\textit{Any mapping to data precision requires decomposing aggregate and stock-specific data}".
+
+  \item \textbf{Wurgler (2000), ``Financial markets and the allocation of capital'', \emph{Journal of Financial Economics}.}\\
+  Finds positive correlation between the development of capital markets and efficiency in the allocation of capital, measured by higher investment in growing industries and viceversa.
+  There are various theories that are cited for explaining this positive correlation.
+  Synchronicity is found to be negatively correlated with capital allocation efficiency, bc it means less firm-specific information is being imputed in the stock's price.\\
+  \textit{Could be a critical assessment of my market info share, think abt what happens during 2008 crisis)}
+
+  \item \textbf{Bond, Edmans \& Goldstein (2012), ``The real effects of financial markets'', \emph{Annual Review of Financial Economics}.}\\
+  Conceptual background on why price informativeness matters for the real economy.
+\end{itemize}
+
+\subsection{Noise in prices and short-horizon inefficiencies}
+
+\begin{itemize}
+  \item \textbf{Black (1986), ``Noise'', \emph{Journal of Finance}.}\\
+  Conceptual foundation for noise traders and noise in prices. Noise is necessary for trading to happen: the necessary condition for observing prices is some degree of imprecision in their reflection of value!
+  Speculates that noise and information are correlated.\\
+  \textit{Could be used when amking theoretical points abt noise}
+
+  \item \textbf{Blume \& Stambaugh (1983), ``Biases in computed returns: An application to the size effect'', \emph{Journal of Financial Economics}.}\\
+  Early evidence that microstructure noise materially biases daily returns.
+
+  \item \textbf{Jegadeesh (1990), ``Evidence of predictable behavior of security returns'', \emph{Journal of Finance}.}\\
+  Pretty much what the title says. The evidence is autocorrelation of returns over intervals of weeks or months.
+  
+  \item \textbf{Lehmann (1990), ``Fads, martingales, and market efficiency'', \emph{Quarterly Journal of Economics}.}\\
+  Short-horizon return reversals; evidence of noise-driven mispricing. Could be used when talking how information is identified in the thesis model.
+  \textbf{Could be interesting to see what the relevant literature has to say about the time horizon over which markets could be defined efficient (as in not experiencing reversals).}
+
+  \item \textbf{Asparouhova, Bessembinder \& Kalcheva (2010), ``Liquidity biases in asset pricing tests'', \emph{Journal of Financial Economics}.}
+  \item \textbf{Asparouhova, Bessembinder \& Kalcheva (2013), ``Noisy prices and inference regarding returns'', \emph{Journal of Finance}.}\\
+  Quantify bias from noisy prices in regressions; strongly related to the noise share.
+
+  \item \textbf{Hendershott \& Menkveld (2014), ``Price pressures'', \emph{Journal of Financial Economics}.}\\
+  Estimates temporary price impact and reversal from order imbalances.
+
+  \item \textbf{French \& Roll (1986), ``Stock return variances: The arrival of information and the reaction of traders'', \emph{Journal of Financial Economics}.}\\
+  Intraday vs overnight variance; basis for variance-ratio validation.
+\end{itemize}
+
+\bigskip
+\hrule
+\bigskip
+
+\section{Determinants and measures of informational efficiency}
+
+\subsection{Alternative efficiency and information measures}
+
+\begin{itemize}
+  \item \textbf{Hou \& Moskowitz (2005), ``Market frictions, price delay, and the cross-section of expected returns'', \emph{Review of Financial Studies}.}\\
+  Delay measure used as a benchmark in Brogaard et al.
+
+  \item \textbf{Griffin, Kelly \& Nardari (2010), ``Do market efficiency measures yield correct inferences? A comparison of developed and emerging markets'', \emph{Review of Financial Studies}.}\\
+  Critique of traditional efficiency measures; helpful context for cross-country comparisons.
+
+  \item \textbf{Rosch, Subrahmanyam \& van Dijk (2017), ``The dynamics of market efficiency'', \emph{Review of Financial Studies}.}\\
+  Time-varying efficiency measures across countries.
+\end{itemize}
+
+\subsection{Microstructure, liquidity, and high-frequency trading}
+
+\begin{itemize}
+  \item \textbf{Kyle (1985), ``Continuous auctions and insider trading'', \emph{Econometrica}.}
+  \item \textbf{Glosten \& Milgrom (1985), ``Bid, ask and transaction prices in a specialist market with heterogeneously informed traders'', \emph{Journal of Financial Economics}.}\\
+  Information-based microstructure models behind using order flow as a private-information proxy.
+
+  \item \textbf{Grossman \& Stiglitz (1980), ``On the impossibility of informationally efficient markets'', \emph{American Economic Review}.}\\
+  Trade-off between price informativeness and incentives to acquire information.
+
+  \item \textbf{Admati \& Pfleiderer (1988), ``A theory of intraday patterns: Volume and price variability'', \emph{Review of Financial Studies}.}\\
+  Interaction of liquidity and informed trading.
+
+  \item \textbf{O'Hara (1995), \emph{Market Microstructure Theory}.}
+  \item \textbf{Hasbrouck (2007), \emph{Empirical Market Microstructure}.}\\
+  Book-length foundations for the microstructure angle.
+
+  \item \textbf{Brogaard, Hendershott \& Riordan (2014), ``High-frequency trading and price discovery'', \emph{Review of Financial Studies}.}\\
+  How HFT affects price discovery; relevant for US vs EU if different HFT regimes matter.
+
+  \item \textbf{Comerton-Forde \& Putnins (2015), ``Dark trading and price discovery'', \emph{Journal of Financial Economics}.}\\
+  Evidence on fragmentation and dark pools; important for EU market structure.
+
+  \item \textbf{Baldauf \& Mollner (2020), ``High-frequency trading and market performance'', \emph{Journal of Finance}.}\\
+  Concerns about HFT and informational efficiency.
+\end{itemize}
+
+\subsection{Firm characteristics, analysts, institutions}
+
+\begin{itemize}
+  \item \textbf{Boehmer \& Kelley (2009), ``Institutional investors and the informational efficiency of prices'', \emph{Review of Financial Studies}.}
+  \item \textbf{Sias \& Starks (1997), ``Return autocorrelation and institutional investors'', \emph{Journal of Finance}.}\\
+  Role of institutional investors in price efficiency.
+
+  \item \textbf{Hong \& Kacperczyk (2010), ``Competition and bias'', \emph{Quarterly Journal of Economics}.}\\
+  Broker mergers and analyst coverage as quasi-exogenous information shocks.
+
+  \item \textbf{Kelly \& Ljungqvist (2012), ``Testing asymmetric-information asset pricing models'', \emph{Review of Financial Studies}.}\\
+  Analyst coverage, information, and stock prices.
+
+  \item \textbf{Hassan, Hollander, van Lent \& Tahoun (2019), ``Firm-Level Political Risk: Measurement and Effects'', \emph{Quarterly Journal of Economics}.}\\
+  Introduces a text-based, firm-level measure of political risk and shows that higher exposure is associated with lower investment and hiring, and stronger political engagement by firms through lobbying.\\
+  \textit{Could be used when talking about the role of political risk in price informativeness.}
+
+  \item \textbf{Huang, Ringgenberg \& Zhang (2019), ``The information in asset fire sales'', working paper.}\\
+  Mutual fund redemptions as exogenous trading shocks.
+\end{itemize}
+
+\bigskip
+\hrule
+\bigskip
+
+\section{Cross-country, institutional and US--EU comparisons}
+
+\subsection{Cross-country price synchronicity and institutions}
+
+\begin{itemize}
+  \item \textbf{Jin \& Myers (2006)} (already listed): synchronicity, opacity, governance.
+
+  \item \textbf{Bushman, Piotroski \& Smith (2004), ``What determines corporate transparency?'', \emph{Journal of Accounting Research}.}\\
+  Transparency, regulation, and country-level institutions.
+
+  \item \textbf{Hutton, Marcus \& Tehranian (2009), ``Opaque financial reports, R\textsuperscript{2}, and crash risk'', \emph{Journal of Financial Economics}.}\\
+  Shows that opaque reporting is associated with higher stock-price synchronicity and higher crash risk; directly relevant for interpreting R\textsuperscript{2} as an information environment outcome.\\
+  At the same time a higher R\textsuperscript{2} and worse info environment is not associated with a more positive skewness, so that the increase in risk is only for the downside of it.\\
+  \textit{Could this be possibly related to lower returns for stocks with higher synchronicity/more opaque information?}
+
+  \item \textbf{La Porta et al. (1997, 1998), ``Legal determinants of external finance'', \emph{Journal of Finance}; ``Law and finance'', \emph{Journal of Political Economy}.}\\
+  Legal and institutional background often used in cross-country finance.
+
+  \item \textbf{Morck, Yeung \& Yu (2000)}\\
+  Explore price synchronicity across developed and developing countries. Find that the higher synchronicity in the second group is due to weaker property rights that have the effect of discouraging risk arbitrage and, subsequently, the pricing of firm-specific information.\\
+  \textit{Could be used to explain differences in market info share if there are good reasons to believe that there are differences in investor's rights protection between EU and US}
+\end{itemize}
+
+\subsection{US vs Europe market structure and regulation}
+
+\begin{itemize}
+  \item \textbf{Christie \& Schultz (1994), ``Why do NASDAQ market makers avoid odd-eighth quotes?'', \emph{Journal of Finance}.}\\
+  Dealer collusion and spreads; important for tick-size and noise.
+
+  \item \textbf{Chordia, Roll \& Subrahmanyam (2008), ``Liquidity and market efficiency'', \emph{Journal of Finance}.}
+  
+  \item \textbf{Chordia, Roll \& Subrahmanyam (2011), ``Recent trends in trading activity and market quality'', \emph{Journal of Financial Economics}.}\\
+  Explore the recent (90'-early 2000) increase in trading activities and find the main cause to be higher institutional trading. The effect is positive with an increase in market efficiency and lover volatility in those stocks with higher institutional ownership.\\
+  \textit{Could be cited when commenting the trend of info shares in the US market.}
+
+  \item Papers on \textbf{MiFID I \& II} and European market quality (to be added): empirical studies on changes in spreads and depth, fragmentation between primary exchanges and MTFs, and impact on price discovery and volatility.
+
+  \item Disclosure and market-abuse regulation:
+  \begin{itemize}
+    \item US: Regulation Fair Disclosure (2000) and Sarbanes--Oxley Act (2002); see, e.g., \textbf{Chen, Goldstein \& Jiang (2007)} and related work.
+    \item EU: Market Abuse Directive/Regulation, Transparency Directive; empirical work comparing pre/post implementation, especially on information asymmetry and price efficiency.
+  \end{itemize}
+\end{itemize}
+
+\bigskip
+\hrule
+\bigskip
+
+\section{Passive investing, ETFs, and information content}
+
+\begin{itemize}
+  \item \textbf{Cong \& Xu (2017), ``Rise of factor investing: Asset prices, informational efficiency, and security design'', working paper.}\\
+  Theoretical link between passive investing and price informativeness.
+
+  \item Empirical work on ETFs/indexing and stock-level price efficiency (to be added), e.g. recent \emph{Journal of Financial Economics} and \emph{Review of Financial Studies} papers on ETF ownership and price efficiency.
+\end{itemize}
+
+\bigskip
+\hrule
+\bigskip
+
+\section{General econometrics / implementation references}
+
+\begin{itemize}
+  \item \textbf{Stock \& Watson (2011), \emph{Introduction to Econometrics}.}\\
+  Lighter reference for basic econometric tools.
+
+  \item \textbf{Wooldridge (2010), \emph{Econometric Analysis of Cross Section and Panel Data}.}\\
+  Main reference for panel regressions of variance components on firm characteristics.
+\end{itemize}
+
+\bigskip
+\noindent
+In line with the research-master expectations, the literature can be organised into:
+\begin{enumerate}
+  \item One core cluster (variance decompositions, Beveridge--Nelson, structural VARs).
+  \item One or two adjacent clusters (global price-informativeness; noise and microstructure).
+  \item A focused institutional block (US vs EU regulation and market structure) where your empirical work adds original evidence.
+\end{enumerate}
+
+\end{document}

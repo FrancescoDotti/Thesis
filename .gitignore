@@ -1,0 +1,29 @@
+# Ignore everything by default
+*
+
+# Keep only the specific folders we want in the repo.
+# NOT including .venv/, .vscode/, Outputs/, or Thesis.code-workspace here
+# means they stay excluded without needing an explicit deny rule.
+!Data/
+!Scripts/
+
+# Keep repo metadata files
+!.gitignore
+!README.md
+
+# Keep script sources inside Scripts/
+!Scripts/**/*.py
+!Scripts/**/*.ipynb
+
+# Keep Excel data files inside Data/
+!Data/**/*.xls
+!Data/**/*.xlsx
+!Data/**/*.xlsm
+
+# Keep PDF and LaTeX source files in the project root or subfolders
+!*.pdf
+!*.tex
+!*.bib
+!*.cls
+!*.sty
+
