@@ -16,7 +16,6 @@
 # In[ ]:
 
 
-import pickle
 from pathlib import Path
 import warnings
 
@@ -33,6 +32,9 @@ warnings.filterwarnings('ignore')
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_DIR / "Data"
 OUTPUTS_DIR = PROJECT_DIR / "Outputs" / "thesis_3_outputs"
+WINSOR_BOUNDS = (0.05, 0.95)
+MIN_VALID_OBS = 20
+RETURN_SCALE = 10000
 
 # Make sure the output folder exists before any figures are written to disk.
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -93,18 +95,7 @@ market = market.ffill(limit=5)
 # Compute the market return series used later in the notebook.
 market_ret = market[index].pct_change(fill_method=None)
 
-# Save the processed objects in Thesis/Data for reuse.
-processed_path = DATA_DIR / 'processed_data.pkl'
-with open(processed_path, 'wb') as file_handle:
-    pickle.dump({
-        'prices': prices,
-        'volume': volume,
-        'market_ret': market_ret,
-        'index': index,
-    }, file_handle)
-
 print(f"Data loaded from {file_path}")
-print(f"Data saved successfully to {processed_path}!")
 
 
 # In[4]:
@@ -124,8 +115,8 @@ for ticker in stock_tickers:
         'ticker': ticker,
         'price': prices[ticker].values,
         'volume': volume[ticker].values,
-        'r': returns[ticker].values * 100,  # Convert to percentage
-        'rm': market_ret.values * 100       # Convert to percentage
+        'r': returns[ticker].values * RETURN_SCALE,   # Convert to basis points
+        'rm': market_ret.values * RETURN_SCALE        # Convert to basis points
     })
 
     df_list.append(ticker_df)
@@ -139,8 +130,8 @@ df['year'] = df['date'].dt.year
 # Remove missing values
 df = df.dropna(subset=['r', 'rm', 'price', 'volume'])
 
-# Filter: min observations per stock-year
-df = df.groupby(['ticker', 'year']).filter(lambda x: len(x) >= 100)
+# Filter: minimum valid daily observations per stock-year
+df = df.groupby(['ticker', 'year']).filter(lambda x: len(x) >= MIN_VALID_OBS)
 
 # Keep only necessary columns in correct order
 df = df[['ticker', 'year', 'date', 'rm', 'r', 'volume', 'price']]
@@ -174,7 +165,14 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
     # Select variables in correct order: [rm, x, r]
     var_data = df[[market_ret_col, 'x', stock_ret_col]].dropna()
 
-    if len(var_data) < 100:  # Minimum observations check
+    # Winsorize raw VAR input series before estimation for extra robustness.
+    # This clips extreme daily observations in market return, signed volume, and stock return.
+    for col in [market_ret_col, 'x', stock_ret_col]:
+        q_low = var_data[col].quantile(WINSOR_BOUNDS[0])
+        q_high = var_data[col].quantile(WINSOR_BOUNDS[1])
+        var_data[col] = var_data[col].clip(lower=q_low, upper=q_high)
+
+    if len(var_data) < MIN_VALID_OBS:  # Minimum observations check
         return None
 
     # ========================================
@@ -186,6 +184,9 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
     except:
         return None
 
+    # Track the lag count actually used by the fitted VAR.
+    used_lags = var_result.k_ar
+
     # Get reduced-form residuals
     resids = var_result.resid
     e_rm = resids.iloc[:, 0]
@@ -196,6 +197,10 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
     sigma2_erm = np.var(e_rm, ddof=1)
     sigma2_ex = np.var(e_x, ddof=1)
     sigma2_er = np.var(e_r, ddof=1)
+
+    # Market residual variance must be positive for structural identification.
+    if sigma2_erm <= 0:
+        return None
 
     # ========================================
     # 3. Identify structural parameters
@@ -221,56 +226,49 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
     if sigma2_eps_x < 0 or sigma2_eps_r < 0:
         return None
 
+    # Build reduced-form coefficient sum for stationarity diagnostics.
+    params = var_result.params.values
+    n_vars = 3
+    A_sum = np.zeros((n_vars, n_vars))
+    for lag in range(used_lags):
+        start_row = 1 + lag * n_vars
+        end_row = 1 + (lag + 1) * n_vars
+        A_lag = params[start_row:end_row, :].T
+        A_sum += A_lag
+
+    eigenvalues = np.linalg.eigvals(A_sum)
+    max_eigenvalue = np.max(np.abs(eigenvalues))
+
+    # Filter out non-stationary/explosive VAR systems.
+    if max_eigenvalue >= 1.0:
+        return None
+
     # ========================================
-    # 5. Calculate impulse responses (Equation A4)
+    # 5. Calculate long-run multipliers (closed-form BN representation)
     # ========================================
-    horizon = 15  # 3 * n_lags as per paper
+    # Compute the analytically exact long-run multiplier matrix:
+    # (I - A1 - A2 - ... - Ap)^(-1)
+    I = np.eye(n_vars)
+    try:
+        LR_matrix = np.linalg.inv(I - A_sum)
+    except np.linalg.LinAlgError:
+        return None
 
-    # Structural shocks as reduced-form equivalents
-    # Shock 1: market return shock [1, b10, c10+c20*b10]
-    shock_rm = np.zeros((horizon, 3))
-    shock_rm[0] = [1, b10, c10 + c20*b10]
+    # Build the structural impact matrix from Appendix A residual equations.
+    # [e_rm, e_x, e_r]' = B0_inv * [eps_rm, eps_x, eps_r]'
+    B0_inv = np.array([
+        [1.0, 0.0, 0.0],
+        [b10, 1.0, 0.0],
+        [c10 + c20 * b10, c20, 1.0],
+    ])
 
-    # Shock 2: signed volume shock [0, 1, c20]
-    shock_x = np.zeros((horizon, 3))
-    shock_x[0] = [0, 1, c20]
+    # Map reduced-form long-run effects into structural long-run effects.
+    LR_structural = LR_matrix @ B0_inv
 
-    # Shock 3: stock return shock [0, 0, 1]
-    shock_r = np.zeros((horizon, 3))
-    shock_r[0] = [0, 0, 1]
-
-    # Calculate cumulative return responses using VAR coefficients
-    def cumulative_response(initial_shock, var_result, horizon):
-        """Calculate cumulative impulse response for stock returns (3rd variable)."""
-        response = np.zeros(horizon)
-        state = initial_shock.copy()
-
-        for t in range(horizon):
-            # Get return response (3rd element)
-            response[t] = state[2]
-
-            # Update state with VAR dynamics (only use lagged effects after t=0)
-            if t < horizon - 1:
-                new_state = np.zeros(3)
-                for lag in range(1, min(t+2, n_lags+1)):
-                    if t - lag + 1 >= 0:
-                        lag_idx = lag - 1
-                        coef_matrix = var_result.params.iloc[1 + lag_idx*3:1 + (lag_idx+1)*3, :].values
-                        # Note: only lagged state matters after initial shock
-                        if lag == 1:
-                            new_state += coef_matrix.T @ state
-                state = new_state
-
-        return np.cumsum(response)
-
-    irf_rm = cumulative_response(shock_rm[0], var_result, horizon)
-    irf_x = cumulative_response(shock_x[0], var_result, horizon)
-    irf_r = cumulative_response(shock_r[0], var_result, horizon)
-
-    # Long-run (permanent) effects at t=15
-    theta_rm = irf_rm[-1]
-    theta_x = irf_x[-1]
-    theta_r = irf_r[-1]
+    # Long-run return multipliers for each structural shock.
+    theta_rm = LR_structural[2, 0]
+    theta_x = LR_structural[2, 1]
+    theta_r = LR_structural[2, 2]
 
     # ========================================
     # 6. Calculate variance components (Equation 9)
@@ -282,13 +280,20 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
     # Information variance
     sigma2_w = MktInfo + PrivateInfo + PublicInfo
 
-    # Calculate noise
-    a0 = var_result.params.iloc[0, 2]  # Constant from return equation (drift)
-    fitted_info_return = (theta_rm * var_result.resid.iloc[:, 0] +
-                          theta_x * var_result.resid.iloc[:, 1] +
-                          theta_r * var_result.resid.iloc[:, 2])
+    # Calculate structural innovations from reduced-form residuals.
+    eps_rm = e_rm.values
+    eps_x = e_x.values - b10 * e_rm.values
+    eps_r = e_r.values - c10 * e_rm.values - c20 * e_x.values
 
-    noise_returns = var_data[stock_ret_col].values[n_lags:] - a0 - fitted_info_return
+    # Calculate noise from structural information model fit.
+    a0 = var_result.params.iloc[0, 2]  # Constant from return equation (drift)
+    fitted_info_return = theta_rm * eps_rm + theta_x * eps_x + theta_r * eps_r
+
+    actual_returns = var_data[stock_ret_col].iloc[used_lags:].values
+    if len(actual_returns) != len(fitted_info_return):
+        return None
+
+    noise_returns = actual_returns - a0 - fitted_info_return
     sigma2_s = np.var(noise_returns, ddof=1)
 
     # Ensure non-negative noise variance
@@ -300,6 +305,8 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
         'PrivateInfo': PrivateInfo,
         'PublicInfo': PublicInfo,
         'Noise': sigma2_s,
+        'k_ar': used_lags,
+        'max_eigenvalue': max_eigenvalue,
         'sigma2_w': sigma2_w,
         'sigma2_s': sigma2_s,
         'theta_rm': theta_rm,
@@ -309,6 +316,92 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
         'c10': c10,
         'c20': c20
     }
+
+
+def winsorize_by_period(df, component_cols, period_col='year', bounds=(0.05, 0.95)):
+    """
+    Winsorize variance components by period and keep Appendix A share logic.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Results dataframe
+    component_cols : list
+        Columns with variance component levels
+    period_col : str
+        Period column (year)
+    bounds : tuple
+        Lower/upper winsorization quantiles
+
+    Returns
+    -------
+    pd.DataFrame with winsorized component levels
+    """
+
+    df_winsorized = df.copy()
+
+    for period_value in df_winsorized[period_col].unique():
+        period_mask = df_winsorized[period_col] == period_value
+        for col in component_cols:
+            q_low = df_winsorized.loc[period_mask, col].quantile(bounds[0])
+            q_high = df_winsorized.loc[period_mask, col].quantile(bounds[1])
+            df_winsorized.loc[period_mask, col] = df_winsorized.loc[period_mask, col].clip(lower=q_low, upper=q_high)
+
+    return df_winsorized
+
+
+def build_yearly_diagnostics(results_df, share_cols, period_col='year', total_col='VarTotal'):
+    """
+    Build a harmonized yearly diagnostics table used by both Thesis_2 and Thesis_3 outputs.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        Stock-year decomposition results
+    share_cols : list
+        Share column names
+    period_col : str
+        Year column name
+    total_col : str
+        Total variance column name
+
+    Returns
+    -------
+    pd.DataFrame with diagnostics by year
+    """
+
+    diagnostics = []
+
+    for period_value, group in results_df.groupby(period_col):
+        valid_share_mask = group[share_cols].notna().all(axis=1)
+        positive_total_mask = group[total_col] > 0
+        valid_mask = valid_share_mask & positive_total_mask
+
+        share_sum = group.loc[valid_mask, share_cols].sum(axis=1)
+
+        row = {
+            'period': str(period_value),
+            'n_stock_years': len(group),
+            'n_unique_stocks': group['stock'].nunique() if 'stock' in group.columns else np.nan,
+            'n_valid_shares': int(valid_mask.sum()),
+            'pct_valid_shares': 100 * valid_mask.mean() if len(group) > 0 else np.nan,
+            'total_var_mean': group[total_col].mean(),
+            'total_var_median': group[total_col].median(),
+            'share_sum_mean': share_sum.mean() if len(share_sum) > 0 else np.nan,
+            'share_sum_std': share_sum.std(ddof=1) if len(share_sum) > 1 else np.nan,
+            'max_eigenvalue_mean': group['max_eigenvalue'].mean() if 'max_eigenvalue' in group.columns else np.nan,
+            'max_eigenvalue_max': group['max_eigenvalue'].max() if 'max_eigenvalue' in group.columns else np.nan,
+            'pct_stationary_lt_0_99': (
+                100 * (group['max_eigenvalue'] < 0.99).mean()
+                if 'max_eigenvalue' in group.columns and len(group) > 0
+                else np.nan
+            ),
+            'k_ar_mean': group['k_ar'].mean() if 'k_ar' in group.columns else np.nan,
+        }
+        diagnostics.append(row)
+
+    diagnostics_df = pd.DataFrame(diagnostics).sort_values('period')
+    return diagnostics_df
 
 
 # In[6]:
@@ -345,13 +438,12 @@ def process_stock_year_data(df, stock_col='ticker', year_col='year',
     # Winsorize variance components by year (5% and 95%)
     # ========================================
     component_cols = ['MktInfo', 'PrivateInfo', 'PublicInfo', 'Noise']
-
-    for year in results_df['year'].unique():
-        year_mask = results_df['year'] == year
-        for col in component_cols:
-            q05 = results_df.loc[year_mask, col].quantile(0.05)
-            q95 = results_df.loc[year_mask, col].quantile(0.95)
-            results_df.loc[year_mask, col] = results_df.loc[year_mask, col].clip(lower=q05, upper=q95)
+    results_df = winsorize_by_period(
+        results_df,
+        component_cols=component_cols,
+        period_col='year',
+        bounds=WINSOR_BOUNDS,
+    )
 
     # ========================================
     # Calculate variance shares (Equation 10)
@@ -436,11 +528,21 @@ print(f"Stock-years with NaN in shares: {results_df[share_cols].isna().any(axis=
 print(f"Stock-years with NaN in VarTotal: {results_df['VarTotal'].isna().sum()}")
 print(f"Stock-years with VarTotal <= 0: {(results_df['VarTotal'] <= 0).sum()}")
 
+# Build harmonized diagnostics so yearly paths can be compared directly with Thesis_2 outputs.
+diagnostics_df = build_yearly_diagnostics(results_df, share_cols, period_col='year', total_col='VarTotal')
+print("\nHarmonized yearly diagnostics (first 10 rows):")
+print(diagnostics_df.head(10))
+
 print("\nStocks per year:")
 print(results_df.groupby('year').size())
 
 print("\nSample of VarTotal by year:")
 print(results_df.groupby('year')['VarTotal'].agg(['count', 'mean', 'min', 'max']))
+
+print("\nVAR stationarity (max eigenvalue):")
+print(f"  Mean: {results_df['max_eigenvalue'].mean():8.4f}")
+print(f"  Max: {results_df['max_eigenvalue'].max():8.4f}")
+print(f"  % with max_eig < 0.99: {(results_df['max_eigenvalue'] < 0.99).sum() / len(results_df) * 100:.1f}%")
 
 
 # In[7]:
@@ -521,6 +623,26 @@ plt.savefig(OUTPUTS_DIR / 'variance_decomposition.png', dpi=300, bbox_inches='ti
 plt.close()
 print("   - Saved: variance_decomposition.png")
 
+# Plotting code - variance-share differences over time (VW - EW)
+# This graph shows how weighting choice changes each variance-share path by year.
+diff_df = VW[share_cols] - EW[share_cols]
+
+fig, ax = plt.subplots(figsize=(11, 6))
+for col, color in zip(share_cols, colors_4way):
+    label_text = col.replace('Share', '').replace('MktInfo', 'Market').replace('PrivateInfo', 'Private').replace('PublicInfo', 'Public')
+    ax.plot(diff_df.index, diff_df[col], marker='o', linewidth=2, color=color, label=label_text)
+
+ax.axhline(0, color='black', linewidth=1, linestyle='--')
+ax.set_xlabel('Year', fontsize=11)
+ax.set_ylabel('VW - EW share difference (pp)', fontsize=11)
+ax.set_title('Variance-Share Differences Over Time (VW minus EW)', fontsize=12, fontweight='bold')
+ax.legend(loc='best', fontsize=9)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig(OUTPUTS_DIR / 'variance_share_differences_over_time.png', dpi=300, bbox_inches='tight')
+plt.close()
+print("   - Saved: variance_share_differences_over_time.png")
+
 # Save detailed results
 print("\n6. Saving detailed results...")
 results_df.to_csv(OUTPUTS_DIR / 'variance_decomposition_results.csv', index=False)
@@ -531,6 +653,8 @@ VW.to_csv(OUTPUTS_DIR / 'variance_decomposition_VW.csv')
 EW.to_csv(OUTPUTS_DIR / 'variance_decomposition_EW.csv')
 print("   - Saved: variance_decomposition_VW.csv")
 print("   - Saved: variance_decomposition_EW.csv")
+diagnostics_df.to_csv(OUTPUTS_DIR / 'variance_decomposition_diagnostics.csv', index=False)
+print("   - Saved: variance_decomposition_diagnostics.csv")
 
 # Save summary statistics
 vw_mean = VW.mean()
@@ -542,6 +666,8 @@ with open(OUTPUTS_DIR / 'variance_decomposition_summary.txt', 'w') as f:
     f.write("Brogaard, Nguyen, Putnins & Wu (2022) Methodology\n")
     f.write("Extended 3-Variable VAR: Market Return, Signed Dollar Volume, Stock Return\n")
     f.write("=" * 80 + "\n\n")
+    f.write(f"WINSORIZATION METHOD: Variance components at {int(WINSOR_BOUNDS[0]*100)}%-{int(WINSOR_BOUNDS[1]*100)}%\n")
+    f.write("(Components winsorized BEFORE calculating shares, matching Appendix A implementation)\n\n")
     f.write("COMPONENTS (Disaggregated):\n")
     f.write("  1. Market Information: Variance driven by market shocks\n")
     f.write("  2. Private Information: Variance driven by private information (via volume)\n")
@@ -572,6 +698,11 @@ with open(OUTPUTS_DIR / 'variance_decomposition_summary.txt', 'w') as f:
     f.write(f"  Private Information:    {ew_mean['PrivateInfoShare']:6.2f}%\n")
     f.write(f"  Public Information:     {ew_mean['PublicInfoShare']:6.2f}%\n")
     f.write(f"  Noise:                  {ew_mean['NoiseShare']:6.2f}%\n")
+
+    f.write("\n\n" + "=" * 80 + "\n")
+    f.write("HARMONIZED YEARLY DIAGNOSTICS (for cross-script comparability)\n")
+    f.write("-" * 80 + "\n")
+    f.write(diagnostics_df.to_string(index=False))
 
 print("   - Saved: variance_decomposition_summary.txt")
 
