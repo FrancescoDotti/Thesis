@@ -687,24 +687,6 @@ def main():
     plt.savefig(OUTPUTS_DIR / 'variance_decomposition.png', dpi=300, bbox_inches='tight')
     print("   - Saved: variance_decomposition.png")
 
-    # Plot variance-share differences over time (VW - EW).
-    # This shows how weighting choice changes each share path by year.
-    diff_df = VW[share_cols] - EW[share_cols]
-
-    fig, ax = plt.subplots(figsize=(11, 6))
-    for col, color in zip(share_cols, ['#1f77b4', '#ff7f0e', '#2ca02c']):
-        ax.plot(diff_df.index, diff_df[col], marker='o', label=col.replace('Share', ''), linewidth=2, color=color)
-
-    ax.axhline(0, color='black', linewidth=1, linestyle='--')
-    ax.set_xlabel('Year', fontsize=11)
-    ax.set_ylabel('VW - EW share difference (pp)', fontsize=11)
-    ax.set_title('Variance-Share Differences Over Time (VW minus EW)', fontsize=12, fontweight='bold')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig(OUTPUTS_DIR / 'variance_share_differences_over_time.png', dpi=300, bbox_inches='tight')
-    print("   - Saved: variance_share_differences_over_time.png")
     
     # ========================================
     # 8. Save detailed results
@@ -721,14 +703,7 @@ def main():
     print("   - Saved: variance_decomposition_VW.csv")
     print("   - Saved: variance_decomposition_EW.csv")
 
-    # Save comparable yearly paths in a shared schema used by both scripts.
-    comparable_vw = VW[share_cols].copy()
-    comparable_ew = EW[share_cols].copy()
-    comparable_vw.to_csv(OUTPUTS_DIR / 'variance_decomposition_comparable_VW.csv')
-    comparable_ew.to_csv(OUTPUTS_DIR / 'variance_decomposition_comparable_EW.csv')
     diagnostics_df.to_csv(OUTPUTS_DIR / 'variance_decomposition_diagnostics.csv', index=False)
-    print("   - Saved: variance_decomposition_comparable_VW.csv")
-    print("   - Saved: variance_decomposition_comparable_EW.csv")
     print("   - Saved: variance_decomposition_diagnostics.csv")
     
     # Save summary statistics

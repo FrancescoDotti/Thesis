@@ -623,26 +623,6 @@ plt.savefig(OUTPUTS_DIR / 'variance_decomposition.png', dpi=300, bbox_inches='ti
 plt.close()
 print("   - Saved: variance_decomposition.png")
 
-# Plotting code - variance-share differences over time (VW - EW)
-# This graph shows how weighting choice changes each variance-share path by year.
-diff_df = VW[share_cols] - EW[share_cols]
-
-fig, ax = plt.subplots(figsize=(11, 6))
-for col, color in zip(share_cols, colors_4way):
-    label_text = col.replace('Share', '').replace('MktInfo', 'Market').replace('PrivateInfo', 'Private').replace('PublicInfo', 'Public')
-    ax.plot(diff_df.index, diff_df[col], marker='o', linewidth=2, color=color, label=label_text)
-
-ax.axhline(0, color='black', linewidth=1, linestyle='--')
-ax.set_xlabel('Year', fontsize=11)
-ax.set_ylabel('VW - EW share difference (pp)', fontsize=11)
-ax.set_title('Variance-Share Differences Over Time (VW minus EW)', fontsize=12, fontweight='bold')
-ax.legend(loc='best', fontsize=9)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.savefig(OUTPUTS_DIR / 'variance_share_differences_over_time.png', dpi=300, bbox_inches='tight')
-plt.close()
-print("   - Saved: variance_share_differences_over_time.png")
-
 # Save detailed results
 print("\n6. Saving detailed results...")
 results_df.to_csv(OUTPUTS_DIR / 'variance_decomposition_results.csv', index=False)
