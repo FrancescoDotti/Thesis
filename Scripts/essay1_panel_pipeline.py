@@ -16,7 +16,9 @@ from typing import Dict
 
 import numpy as np
 import pandas as pd
-import statsmodels.formula.api as smf
+from linearmodels.panel import PanelOLS
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from data_interface import parse_data_workbook, summarize_parsed_panel
 from Thesis_2 import run_thesis2_from_daily_panel
@@ -149,6 +151,12 @@ def standardize_decomposition_output(raw_results: pd.DataFrame, decomp_model: st
             df[col] = np.nan
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # Add an aggregated firm-information share only for thesis3 robustness checks.
+    if decomp_model == "thesis3":
+        df["FirmInfoShareAgg"] = df["PrivateInfoShare"] + df["PublicInfoShare"]
+    else:
+        df["FirmInfoShareAgg"] = np.nan
+
     # Keep a clear, panel-first column order.
     base_cols = [
         "stock",
@@ -160,6 +168,7 @@ def standardize_decomposition_output(raw_results: pd.DataFrame, decomp_model: st
         "FirmInfoShare",
         "PrivateInfoShare",
         "PublicInfoShare",
+        "FirmInfoShareAgg",
         "NoiseShare",
     ]
     other_cols = [col for col in df.columns if col not in base_cols]
@@ -190,7 +199,14 @@ def apply_sample_filters(panel_df: pd.DataFrame, start_year: int = 2015, end_yea
     df = df[df["year"].between(start_year, end_year, inclusive="both")]
 
     # Ensure key variance-share fields are in valid 0-100 range when present.
-    share_cols = ["MktInfoShare", "FirmInfoShare", "PrivateInfoShare", "PublicInfoShare", "NoiseShare"]
+    share_cols = [
+        "MktInfoShare",
+        "FirmInfoShare",
+        "PrivateInfoShare",
+        "PublicInfoShare",
+        "FirmInfoShareAgg",
+        "NoiseShare",
+    ]
     for col in share_cols:
         valid_mask = df[col].isna() | ((df[col] >= 0) & (df[col] <= 100))
         df = df[valid_mask]
@@ -217,12 +233,12 @@ def build_merge_diagnostics(pre_merge: pd.DataFrame, post_merge: pd.DataFrame) -
     return out.sort_values("year").reset_index(drop=True)
 
 
-def _fit_clustered_fe_ols(df: pd.DataFrame, outcome_col: str) -> pd.Series:
+def _fit_clustered_fe_panel(df: pd.DataFrame, outcome_col: str) -> pd.Series:
     """
-    Fit OLS with firm and year fixed effects and stock-clustered standard errors.
+    Fit PanelOLS with firm and year effects and stock-clustered standard errors.
 
     Model:
-        outcome ~ ESG + controls + C(stock) + C(year)
+        outcome ~ ESG + controls + EntityEffects + TimeEffects
     """
 
     # Keep regression variables explicit and readable.
@@ -233,7 +249,6 @@ def _fit_clustered_fe_ols(df: pd.DataFrame, outcome_col: str) -> pd.Series:
             outcome_col,
             "esg_score_y",
             "size_y",
-            "book_to_market_y",
             "leverage_y",
             "analyst_coverage_y",
         ]
@@ -244,7 +259,6 @@ def _fit_clustered_fe_ols(df: pd.DataFrame, outcome_col: str) -> pd.Series:
         outcome_col,
         "esg_score_y",
         "size_y",
-        "book_to_market_y",
         "leverage_y",
         "analyst_coverage_y",
     ]:
@@ -260,11 +274,12 @@ def _fit_clustered_fe_ols(df: pd.DataFrame, outcome_col: str) -> pd.Series:
                 "outcome": outcome_col,
                 "n_obs": 0,
                 "n_stocks": 0,
+                "n_years": 0,
                 "coef_esg": np.nan,
                 "se_esg": np.nan,
                 "t_esg": np.nan,
                 "p_esg": np.nan,
-                "r2": np.nan,
+                "within_r2": np.nan,
             }
         )
 
@@ -274,36 +289,42 @@ def _fit_clustered_fe_ols(df: pd.DataFrame, outcome_col: str) -> pd.Series:
                 "outcome": outcome_col,
                 "n_obs": int(len(reg_df)),
                 "n_stocks": int(reg_df["stock"].nunique()),
+                "n_years": int(reg_df["year"].nunique()),
                 "coef_esg": np.nan,
                 "se_esg": np.nan,
                 "t_esg": np.nan,
                 "p_esg": np.nan,
-                "r2": np.nan,
+                "within_r2": np.nan,
             }
         )
 
-    # Estimate fixed-effects model via dummies and stock-clustered covariance.
-    formula = (
-        f"{outcome_col} ~ esg_score_y + size_y + book_to_market_y + leverage_y + "
-        f"analyst_coverage_y + C(stock) + C(year)"
-    )
+    # Move to panel index expected by PanelOLS.
+    reg_df = reg_df.set_index(["stock", "year"]).sort_index()
+
+    # Build outcome and regressors for fixed-effects panel estimation.
+    y = reg_df[outcome_col]
+    x = reg_df[["esg_score_y", "size_y", "leverage_y", "analyst_coverage_y"]]
 
     try:
-        fitted = smf.ols(formula=formula, data=reg_df).fit(
-            cov_type="cluster",
-            cov_kwds={"groups": reg_df["stock"]},
-        )
+        fitted = PanelOLS(
+            dependent=y,
+            exog=x,
+            entity_effects=True,
+            time_effects=True,
+            drop_absorbed=True,
+        ).fit(cov_type="clustered", cluster_entity=True)
 
         return pd.Series(
             {
                 "outcome": outcome_col,
                 "n_obs": int(len(reg_df)),
-                "n_stocks": int(reg_df["stock"].nunique()),
+                "n_stocks": int(reg_df.index.get_level_values(0).nunique()),
+                "n_years": int(reg_df.index.get_level_values(1).nunique()),
                 "coef_esg": float(fitted.params.get("esg_score_y", np.nan)),
-                "se_esg": float(fitted.bse.get("esg_score_y", np.nan)),
-                "t_esg": float(fitted.tvalues.get("esg_score_y", np.nan)),
+                "se_esg": float(fitted.std_errors.get("esg_score_y", np.nan)),
+                "t_esg": float(fitted.tstats.get("esg_score_y", np.nan)),
                 "p_esg": float(fitted.pvalues.get("esg_score_y", np.nan)),
-                "r2": float(fitted.rsquared),
+                "within_r2": float(fitted.rsquared_within),
             }
         )
     except Exception:
@@ -311,12 +332,13 @@ def _fit_clustered_fe_ols(df: pd.DataFrame, outcome_col: str) -> pd.Series:
             {
                 "outcome": outcome_col,
                 "n_obs": int(len(reg_df)),
-                "n_stocks": int(reg_df["stock"].nunique()),
+                "n_stocks": int(reg_df.index.get_level_values(0).nunique()),
+                "n_years": int(reg_df.index.get_level_values(1).nunique()),
                 "coef_esg": np.nan,
                 "se_esg": np.nan,
                 "t_esg": np.nan,
                 "p_esg": np.nan,
-                "r2": np.nan,
+                "within_r2": np.nan,
             }
         )
 
@@ -329,7 +351,7 @@ def run_fe_regressions(panel_df: pd.DataFrame, decomp_model: str) -> pd.DataFram
 
     # For Thesis_3, keep disaggregated information shares as separate outcomes.
     if decomp_model == "thesis3":
-        outcomes.extend(["PrivateInfoShare", "PublicInfoShare"])
+        outcomes.extend(["PrivateInfoShare", "PublicInfoShare", "FirmInfoShareAgg"])
     elif decomp_model == "thesis2":
         outcomes.extend(["FirmInfoShare"])
 
@@ -338,11 +360,11 @@ def run_fe_regressions(panel_df: pd.DataFrame, decomp_model: str) -> pd.DataFram
 
     rows = []
     for outcome_col in outcomes:
-        rows.append(_fit_clustered_fe_ols(panel_df, outcome_col))
+        rows.append(_fit_clustered_fe_panel(panel_df, outcome_col))
 
     if len(rows) == 0:
         return pd.DataFrame(
-            columns=["outcome", "n_obs", "n_stocks", "coef_esg", "se_esg", "t_esg", "p_esg", "r2"]
+            columns=["outcome", "n_obs", "n_stocks", "n_years", "coef_esg", "se_esg", "t_esg", "p_esg", "within_r2"]
         )
 
     return pd.DataFrame(rows)
@@ -356,25 +378,182 @@ def _regression_table_to_markdown(reg_df: pd.DataFrame) -> str:
 
     # Build table header.
     lines = []
-    lines.append("| outcome | n_obs | n_stocks | coef_esg | se_esg | t_esg | p_esg | r2 |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+    lines.append("| outcome | n_obs | n_stocks | n_years | coef_esg | se_esg | t_esg | p_esg | within_r2 |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
 
     # Add one row per specification with concise rounding.
     for _, row in reg_df.iterrows():
         lines.append(
-            "| {outcome} | {n_obs} | {n_stocks} | {coef_esg:.4f} | {se_esg:.4f} | {t_esg:.3f} | {p_esg:.4f} | {r2:.4f} |".format(
+            "| {outcome} | {n_obs} | {n_stocks} | {n_years} | {coef_esg:.4f} | {se_esg:.4f} | {t_esg:.3f} | {p_esg:.4f} | {within_r2:.4f} |".format(
                 outcome=row["outcome"],
                 n_obs=int(row["n_obs"]) if pd.notna(row["n_obs"]) else 0,
                 n_stocks=int(row["n_stocks"]) if pd.notna(row["n_stocks"]) else 0,
+                n_years=int(row["n_years"]) if pd.notna(row["n_years"]) else 0,
                 coef_esg=row["coef_esg"] if pd.notna(row["coef_esg"]) else np.nan,
                 se_esg=row["se_esg"] if pd.notna(row["se_esg"]) else np.nan,
                 t_esg=row["t_esg"] if pd.notna(row["t_esg"]) else np.nan,
                 p_esg=row["p_esg"] if pd.notna(row["p_esg"]) else np.nan,
-                r2=row["r2"] if pd.notna(row["r2"]) else np.nan,
+                within_r2=row["within_r2"] if pd.notna(row["within_r2"]) else np.nan,
             )
         )
 
     return "\n".join(lines)
+
+
+def create_visualizations(
+    filtered_panel: pd.DataFrame,
+    regression_table: pd.DataFrame,
+    decomp_outputs: Dict[str, pd.DataFrame],
+    decomp_model: str,
+    start_year: int,
+    end_year: int,
+) -> None:
+    """Generate and save visualization figures for the panel and regressions."""
+
+    sns.set_style("whitegrid")
+    
+    # 1) ESG coefficient plot with 95% confidence intervals.
+    fig, ax = plt.subplots(figsize=(10, 6))
+    reg_table_sorted = regression_table.sort_values("coef_esg")
+    
+    for idx, (_, row) in enumerate(reg_table_sorted.iterrows()):
+        coef = row["coef_esg"]
+        se = row["se_esg"]
+        ci_lo = coef - 1.96 * se
+        ci_hi = coef + 1.96 * se
+        color = "green" if row["p_esg"] < 0.05 else "gray"
+        ax.plot([ci_lo, ci_hi], [idx, idx], color=color, linewidth=2, marker="_", markersize=8)
+        ax.plot(coef, idx, "o", color=color, markersize=8)
+    
+    ax.set_yticks(range(len(reg_table_sorted)))
+    ax.set_yticklabels(reg_table_sorted["outcome"].values)
+    ax.axvline(0, color="black", linestyle="--", linewidth=1, alpha=0.5)
+    ax.set_xlabel("ESG Score Coefficient (95% CI)", fontsize=12)
+    ax.set_title(f"ESG Effects on Information/Noise Shares ({decomp_model})", fontsize=13, fontweight="bold")
+    ax.grid(axis="x", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(OUTPUTS_DIR / f"essay1_coef_plot_{decomp_model}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    
+    # 2) Sample coverage by year and outcome.
+    if len(filtered_panel) > 0:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        yearly_coverage = filtered_panel.groupby("year").agg({
+            "stock": "nunique",
+            "esg_score_y": "count"
+        }).rename(columns={"stock": "n_stocks", "esg_score_y": "n_obs"})
+        
+        ax.bar(yearly_coverage.index, yearly_coverage["n_stocks"], alpha=0.7, label="Unique Stocks", color="steelblue")
+        ax.set_xlabel("Year", fontsize=12)
+        ax.set_ylabel("Count", fontsize=12)
+        ax.set_title(f"Panel Coverage by Year ({decomp_model})", fontsize=13, fontweight="bold")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(OUTPUTS_DIR / f"essay1_coverage_{decomp_model}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+    
+    # 3) ESG score distribution.
+    if "esg_score_y" in filtered_panel.columns and filtered_panel["esg_score_y"].notna().any():
+        fig, ax = plt.subplots(figsize=(10, 6))
+        filtered_panel["esg_score_y"].dropna().hist(bins=30, ax=ax, color="steelblue", edgecolor="black", alpha=0.7)
+        ax.set_xlabel("ESG Score", fontsize=12)
+        ax.set_ylabel("Frequency", fontsize=12)
+        ax.set_title(f"Distribution of Yearly ESG Scores ({decomp_model})", fontsize=13, fontweight="bold")
+        ax.grid(axis="y", alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(OUTPUTS_DIR / f"essay1_esg_dist_{decomp_model}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+    
+    # 4) Line graphs from decomposition EW/VW outputs (matches Thesis output style).
+    # Start from adapter-produced equal-weighted and variance-weighted yearly tables.
+    ew_df = decomp_outputs.get("ew", pd.DataFrame()).copy()
+    vw_df = decomp_outputs.get("vw", pd.DataFrame()).copy()
+
+    def _normalize_year_table(table: pd.DataFrame) -> pd.DataFrame:
+        """Normalize year index/column so plotting is consistent across adapters."""
+
+        if len(table) == 0:
+            return table
+
+        out = table.copy()
+
+        # Convert index to a visible year column when needed.
+        if "year" not in out.columns:
+            out = out.reset_index()
+
+        # Ensure the year key is explicitly named `year`.
+        if "year" not in out.columns:
+            first_col = out.columns[0]
+            out = out.rename(columns={first_col: "year"})
+
+        out["year"] = pd.to_numeric(out["year"], errors="coerce")
+        out = out.dropna(subset=["year"])
+        out = out[out["year"].between(start_year, end_year, inclusive="both")]
+        out = out.sort_values("year")
+        return out
+
+    ew_df = _normalize_year_table(ew_df)
+    vw_df = _normalize_year_table(vw_df)
+
+    if decomp_model == "thesis3":
+        component_map = {
+            "MktInfoShare": "Market",
+            "PrivateInfoShare": "Private",
+            "PublicInfoShare": "Public",
+            "NoiseShare": "Noise",
+        }
+    else:
+        component_map = {
+            "MktInfoShare": "MktInfo",
+            "FirmInfoShare": "FirmInfo",
+            "NoiseShare": "Noise",
+        }
+
+    plot_cols_ew = [col for col in component_map if col in ew_df.columns]
+    plot_cols_vw = [col for col in component_map if col in vw_df.columns]
+
+    # Plot equal-weighted shares over time.
+    if len(ew_df) > 0 and len(plot_cols_ew) > 0:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        for col in plot_cols_ew:
+            ax.plot(
+                ew_df["year"],
+                ew_df[col],
+                marker="o",
+                linewidth=2,
+                label=component_map[col],
+            )
+        ax.set_xlabel("Year", fontsize=12)
+        ax.set_ylabel("Share (%)", fontsize=12)
+        ax.set_title(f"Equal-Weighted Shares Over Time ({decomp_model})", fontsize=13, fontweight="bold")
+        ax.set_ylim([0, 100])
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=10)
+        plt.tight_layout()
+        plt.savefig(OUTPUTS_DIR / f"essay1_ew_shares_{decomp_model}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+    # Plot variance-weighted shares over time.
+    if len(vw_df) > 0 and len(plot_cols_vw) > 0:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        for col in plot_cols_vw:
+            ax.plot(
+                vw_df["year"],
+                vw_df[col],
+                marker="o",
+                linewidth=2,
+                label=component_map[col],
+            )
+        ax.set_xlabel("Year", fontsize=12)
+        ax.set_ylabel("Share (%)", fontsize=12)
+        ax.set_title(f"Variance-Weighted Shares Over Time ({decomp_model})", fontsize=13, fontweight="bold")
+        ax.set_ylim([0, 100])
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=10)
+        plt.tight_layout()
+        plt.savefig(OUTPUTS_DIR / f"essay1_vw_shares_{decomp_model}.png", dpi=300, bbox_inches="tight")
+        plt.close()
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
@@ -407,24 +586,25 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # 4) Merge decomposition results with controls on (stock, year).
     merged = decomp_results.merge(controls_yearly, on=["stock", "year"], how="left")
 
-    # 5) Apply sample filters and build diagnostics.
+    # 5) Apply sample filters.
     filtered_panel = apply_sample_filters(merged, start_year=args.start_year, end_year=args.end_year)
-    merge_diag = build_merge_diagnostics(decomp_results, filtered_panel)
 
     # 6) Run FE regressions on the filtered firm-year panel.
     regression_table = run_fe_regressions(filtered_panel, decomp_model=args.decomp)
 
-    # 7) Save outputs to deterministic file names.
+    # 7) Save essential outputs (panel and regression results) and generate visualizations.
     filtered_panel.to_csv(OUTPUTS_DIR / f"essay1_panel_{args.decomp}.csv", index=False)
-    merge_diag.to_csv(OUTPUTS_DIR / f"essay1_merge_diagnostics_{args.decomp}.csv", index=False)
     regression_table.to_csv(OUTPUTS_DIR / f"essay1_regression_results_{args.decomp}.csv", index=False)
-
-    # Save decomposition diagnostics from adapters for transparency.
-    decomp_outputs["diagnostics"].to_csv(OUTPUTS_DIR / f"essay1_decomp_diagnostics_{args.decomp}.csv", index=False)
-
-    # Save parser summary to a 1-row CSV for quick validation.
-    parser_summary = pd.DataFrame([summarize_parsed_panel(parsed["daily"], parsed["quarterly"])])
-    parser_summary.to_csv(OUTPUTS_DIR / f"essay1_parser_summary_{args.decomp}.csv", index=False)
+    
+    # Create visualizations.
+    create_visualizations(
+        filtered_panel=filtered_panel,
+        regression_table=regression_table,
+        decomp_outputs=decomp_outputs,
+        decomp_model=args.decomp,
+        start_year=args.start_year,
+        end_year=args.end_year,
+    )
 
     # Save concise markdown report.
     with open(OUTPUTS_DIR / f"essay1_panel_report_{args.decomp}.md", "w", encoding="utf-8") as report:
@@ -440,14 +620,15 @@ def run_pipeline(args: argparse.Namespace) -> None:
         if args.decomp == "thesis3":
             report.write("## Decomposition outcome notes\n")
             report.write("- `PrivateInfoShare` and `PublicInfoShare` are kept separate.\n")
-            report.write("- No aggregate information-share metric is constructed.\n")
+            report.write("- An additional aggregated `FirmInfoShareAgg = PrivateInfoShare + PublicInfoShare` is used only as a robustness regression outcome.\n")
 
         report.write("\n## Fixed-effects regressions\n")
-        report.write("- Specification: firm and year fixed effects with stock-clustered standard errors.\n")
-        report.write("- Core regressor: `esg_score_y`. Controls: size, book-to-market, leverage, analyst coverage.\n\n")
+        report.write("- Specification: PanelOLS with entity and time fixed effects, stock-clustered standard errors.\n")
+        report.write("- Core regressor: `esg_score_y`. Controls: size, leverage, analyst coverage.\n")
+        report.write("- Reported fit metric is within-R² (not overall R²).\n\n")
         report.write("- Reported outcomes include `MktInfoShare` and `noise_share_proxy` for all models.\n")
         if args.decomp == "thesis3":
-            report.write("- For `thesis3`, `PrivateInfoShare` and `PublicInfoShare` are also estimated separately.\n\n")
+            report.write("- For `thesis3`, `PrivateInfoShare`, `PublicInfoShare`, and aggregated `FirmInfoShareAgg` are also estimated.\n\n")
         elif args.decomp == "thesis2":
             report.write("- For `thesis2`, `FirmInfoShare` is also estimated separately.\n\n")
         else:
@@ -458,8 +639,9 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # Print short execution summary.
     print("Pipeline complete.")
     print(f"Saved panel: {OUTPUTS_DIR / f'essay1_panel_{args.decomp}.csv'}")
-    print(f"Saved merge diagnostics: {OUTPUTS_DIR / f'essay1_merge_diagnostics_{args.decomp}.csv'}")
     print(f"Saved regression results: {OUTPUTS_DIR / f'essay1_regression_results_{args.decomp}.csv'}")
+    print(f"Generated report: {OUTPUTS_DIR / f'essay1_panel_report_{args.decomp}.md'}")
+    print(f"Generated visualizations: {OUTPUTS_DIR / f'essay1_*_{args.decomp}.png'}")
 
 
 def parse_args() -> argparse.Namespace:

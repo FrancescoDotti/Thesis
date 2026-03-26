@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore")
 
 WINSOR_BOUNDS = (0.05, 0.95)
 MIN_VALID_OBS = 20
+RETURN_SCALE = 10000
 
 
 def decompose_variance_single_stock(
@@ -33,7 +34,11 @@ def decompose_variance_single_stock(
     df["x"] = np.sign(df[stock_ret_col]) * df[price_col] * df[volume_col]
 
     # Keep variables in required VAR order: market return, signed volume, stock return.
-    var_data = df[[market_ret_col, "x", stock_ret_col]].dropna()
+    var_data = df[[market_ret_col, "x", stock_ret_col]].dropna().copy()
+
+    # Match Thesis_2 scaling and paper-style implementation: use basis points for returns.
+    var_data[market_ret_col] = var_data[market_ret_col] * RETURN_SCALE
+    var_data[stock_ret_col] = var_data[stock_ret_col] * RETURN_SCALE
 
     # Winsorize each VAR input series for robust estimation.
     for col in [market_ret_col, "x", stock_ret_col]:

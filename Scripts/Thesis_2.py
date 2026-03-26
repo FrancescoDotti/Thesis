@@ -68,7 +68,10 @@ def run_thesis2_from_daily_panel(daily_df, n_lags=5, winsor_bounds=WINSOR_BOUNDS
     # Process one year at a time to keep behavior close to the original script.
     for year, year_group in df.groupby('year'):
         # Build one market return series indexed by date for this year.
-        market_ret = year_group.groupby('date')['market_ret'].mean().sort_index()
+        # Use .first() instead of .mean() to avoid NaN issues: every stock carries the same market_ret,
+        # so take the first value. Using .mean() would silently produce wrong values on dates where
+        # some stocks have NaN market returns.
+        market_ret = year_group.groupby('date')['market_ret'].first().sort_index()
 
         # Process each stock in the year against the common market return series.
         for stock, stock_group in year_group.groupby('stock'):
