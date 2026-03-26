@@ -1,0 +1,112 @@
+\documentclass[12pt]{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\onehalfspacing
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue}
+
+\begin{document}
+
+\title{\textbf{Thesis Proposal: Essays on Information and Noise in Stock Prices}}
+\author{Francesco Dotti Giberti \\ Université Catholique de Louvain}
+\maketitle
+
+\vspace{-1em}
+\section*{Overview}
+
+\noindent
+\textbf{Two independent essays sharing a common methodology:} variance decomposition of daily stock returns into \emph{information} and \emph{noise} components (following Brogaard et al., 2022). 
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Essay I:} ESG narratives and the informativeness of stock prices.
+  \item \textbf{Essay II:} The Russia--Ukraine war as a geopolitical shock, measured via firm-level narrative exposure.
+  \item AI narrative can be used for each of the above options if data is easier to find
+\end{itemize}
+
+\noindent
+\textbf{Research question}: \emph{How do narratives reshape the information content of prices? Do they influence real firm outcomes like investment?}
+
+\vspace{0.5em}
+\section*{Essay I -- ESG Narratives and Price Informativeness}
+
+\subsection*{Research Questions}
+\begin{enumerate}[leftmargin=*,label={\arabic*.}]
+  \item Does higher ESG exposure correlate with a larger firm-specific \emph{information} share (vs noise) in return variance?
+  \item Is the ESG--price informativeness relation driven by fundamentals (ESG scores) or narrative attention (media intensity)?
+\end{enumerate}
+
+\subsection*{Data and Sample}
+\begin{itemize}[leftmargin=*]
+  \item Universe: STOXX Europe 600 (or MSCI Europe), 2010--2025.
+  \item Prices: daily returns + market index.
+  \item ESG score: firm-level scores (MSCI/Refinitiv/Bloomberg).
+  \item Narrative: ESG keyword intensity in news or earnings calls.
+  \item Firm controls: size, book-to-market, leverage, analyst coverage.
+\end{itemize}
+
+\subsection*{Methodology}
+\begin{enumerate}[leftmargin=*]
+  \item Estimate variance decomposition via VAR for each firm--year:
+    \[
+    \text{InfoShare}_{it} = \frac{\text{Variance from firm-specific info shocks}}{\text{Total return variance}_{it}}
+    \]
+  \item Panel regressions:
+    \[
+    \text{InfoShare}_{it} = \alpha + \beta_1 \text{ESG\_Level}_{it} + \beta_2 \text{ESG\_Narrative}_{it} + \gamma X_{it} + \mu_i + \lambda_t + \varepsilon_{it}
+    \]
+\end{enumerate}
+
+\vspace{0.5em}
+\section*{Essay II -- Russia--Ukraine War, Narrative Exposure, and Real Effects}
+
+\subsection*{Research Questions}
+\begin{enumerate}[leftmargin=*,label={\arabic*.}]
+  \item How did the war reshape return variance components (info vs noise)?
+  \item Do firms with higher \emph{war narrative exposure} (from earnings calls) exhibit different InfoShare/NoiseShare?
+  \item Does war narrative exposure predict post-war investment changes, and does this depend on pre-war price informativeness?
+\end{enumerate}
+
+\subsection*{Data and Sample}
+\begin{itemize}[leftmargin=*]
+  \item Universe: STOXX Europe 600 (could be expanded/changed), 2018--2025.
+  \item Prices and accounting: same as Essay I (CapEx, R\&D, assets).
+  \item War exposure: \textbf{IRU$_i$} = share of earnings call text on war keywords (\textit{Caldara et al. 2025}).
+\end{itemize}
+
+\subsection*{Methodology}
+\begin{enumerate}[leftmargin=*]
+  \item Variance decomposition, pre-war (2018--2021) and post-war (2022--2025).
+  \item Decomposition regressions:
+    \[
+    \text{InfoShare}_{it} = \alpha + \beta \text{IRU}_{it} + \gamma X_{it} + \varepsilon_{it}
+    \]
+  \item Real effects:
+    \[
+    \Delta\text{CapEx}_{i,t+1} = \alpha + \beta_1 \text{IRU}_{it} + \beta_2 \text{InfoShare}_{i,\text{pre}} + \gamma X_{it} + \varepsilon_{i,t+1}
+    \]
+\end{enumerate}
+
+\vspace{0.5em}
+\section*{Key Literature}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Methodology:} Brogaard et al. (2022), RFS; Dim--Sangiorgi--Vilkov (2023), narratives and informativeness.
+  \item \textbf{ESG:} Pastor et al. (2022), ESG premia; ESG--war papers (e.g. SSRN 4912382).
+  \item \textbf{War narrative:} Caldara et al. (2025), Fed IFDP (earnings-call war exposure $\rightarrow$ investment).
+  \item \textbf{Real effects:} Hassan et al. (2019), QJE (text-based risk $\rightarrow$ investment).
+\end{itemize}
+
+\section*{Data}
+\begin{itemize}
+    \item Prices: Bloomberg/Yahoo Finance
+    \item Firm controls / real effects of info: Bloomberg
+    \item Vocabulary / earning calls: Factiva (?), free resources (?)
+\end{itemize}
+
+
+
+\end{document}

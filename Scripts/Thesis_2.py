@@ -32,6 +32,86 @@ WINSOR_BOUNDS = (0.05, 0.95)
 RETURN_SCALE = 10000
 
 
+def run_thesis2_from_daily_panel(daily_df, n_lags=5, winsor_bounds=WINSOR_BOUNDS):
+    """
+    Run Thesis_2 decomposition from a canonical daily panel.
+
+    Expected input columns
+    ----------------------
+    daily_df : pd.DataFrame
+        Must include: stock, date, stock_ret, market_ret
+
+    Returns
+    -------
+    dict
+        {
+            'results': stock-year decomposition table,
+            'ew': equal-weighted yearly shares,
+            'vw': variance-weighted yearly shares,
+            'diagnostics': yearly diagnostics table
+        }
+    """
+
+    required_cols = {'stock', 'date', 'stock_ret', 'market_ret'}
+    missing_cols = required_cols - set(daily_df.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns for Thesis_2 adapter: {sorted(missing_cols)}")
+
+    # Normalize schema and keep only rows with core decomposition inputs.
+    df = daily_df.copy()
+    df['date'] = pd.to_datetime(df['date'])
+    df['year'] = df['date'].dt.year
+    df = df.dropna(subset=['stock', 'date', 'stock_ret', 'market_ret'])
+
+    all_results = []
+
+    # Process one year at a time to keep behavior close to the original script.
+    for year, year_group in df.groupby('year'):
+        # Build one market return series indexed by date for this year.
+        market_ret = year_group.groupby('date')['market_ret'].mean().sort_index()
+
+        # Process each stock in the year against the common market return series.
+        for stock, stock_group in year_group.groupby('stock'):
+            stock_ret = stock_group.set_index('date')['stock_ret'].sort_index()
+
+            result = decompose_variance_single_period(
+                market_ret=market_ret,
+                stock_ret=stock_ret,
+                stock_name=stock,
+                n_lags=n_lags,
+            )
+
+            if result is not None:
+                result['period'] = str(year)
+                all_results.append(result)
+
+    if len(all_results) == 0:
+        empty_results = pd.DataFrame()
+        return {
+            'results': empty_results,
+            'ew': pd.DataFrame(),
+            'vw': pd.DataFrame(),
+            'diagnostics': pd.DataFrame(),
+        }
+
+    results_df = pd.DataFrame(all_results)
+
+    # Apply the same component-level winsorization as the legacy script.
+    component_cols = ['MktInfo', 'FirmInfo', 'Noise']
+    results_df = winsorize_by_period(results_df, component_cols, bounds=winsor_bounds)
+
+    share_cols = ['MktInfoShare', 'FirmInfoShare', 'NoiseShare']
+    ew_df, vw_df = calculate_aggregate_shares(results_df, share_cols)
+    diagnostics_df = build_yearly_diagnostics(results_df, share_cols)
+
+    return {
+        'results': results_df,
+        'ew': ew_df,
+        'vw': vw_df,
+        'diagnostics': diagnostics_df,
+    }
+
+
 def load_data(data_path="./Data/BigSmall_NYA.xlsx"):
     """
     Load stock data from Excel file.

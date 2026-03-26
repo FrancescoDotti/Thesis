@@ -459,6 +459,76 @@ def process_stock_year_data(df, stock_col='ticker', year_col='year',
     return results_df
 
 
+def run_thesis3_from_daily_panel(daily_df):
+    """
+    Run Thesis_3 decomposition from a canonical daily panel.
+
+    Expected input columns
+    ----------------------
+    daily_df : pd.DataFrame
+        Must include: stock, date, price, volume, stock_ret, market_ret
+
+    Returns
+    -------
+    dict
+        {
+            'results': stock-year decomposition table,
+            'ew': equal-weighted yearly shares,
+            'vw': variance-weighted yearly shares,
+            'diagnostics': yearly diagnostics table
+        }
+    """
+
+    required_cols = {'stock', 'date', 'price', 'volume', 'stock_ret', 'market_ret'}
+    missing_cols = required_cols - set(daily_df.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns for Thesis_3 adapter: {sorted(missing_cols)}")
+
+    # Map canonical names to the function's expected names.
+    df = daily_df.copy()
+    df['date'] = pd.to_datetime(df['date'])
+    df['year'] = df['date'].dt.year
+    df = df.rename(
+        columns={
+            'stock': 'ticker',
+            'stock_ret': 'r',
+            'market_ret': 'rm',
+        }
+    )
+
+    # Keep only rows with all variables needed by the 4-way model.
+    df = df.dropna(subset=['ticker', 'year', 'date', 'rm', 'r', 'volume', 'price'])
+
+    results_df = process_stock_year_data(
+        df,
+        stock_col='ticker',
+        year_col='year',
+        market_ret_col='rm',
+        stock_ret_col='r',
+        volume_col='volume',
+        price_col='price',
+    )
+
+    if len(results_df) == 0:
+        return {
+            'results': results_df,
+            'ew': pd.DataFrame(),
+            'vw': pd.DataFrame(),
+            'diagnostics': pd.DataFrame(),
+        }
+
+    share_cols = ['MktInfoShare', 'PrivateInfoShare', 'PublicInfoShare', 'NoiseShare']
+    ew_df, vw_df = aggregate_variance_shares_fixed(results_df, share_cols=share_cols)
+    diagnostics_df = build_yearly_diagnostics(results_df, share_cols, period_col='year', total_col='VarTotal')
+
+    return {
+        'results': results_df,
+        'ew': ew_df,
+        'vw': vw_df,
+        'diagnostics': diagnostics_df,
+    }
+
+
 def aggregate_variance_shares_fixed(results_df, share_cols=None):
     """
     Calculate equal-weighted and variance-weighted yearly averages.
