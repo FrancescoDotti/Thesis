@@ -1,0 +1,66 @@
+\documentclass[12pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{amsmath}
+
+\onehalfspacing
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+
+\begin{document}
+
+\title{Interim Dissertation Report Draft}
+\author{Francesco Dotti Giberti}
+\date{16 April 2026}
+\maketitle
+
+\section*{Project Overview}
+The \texttt{Thesis} folder contains the working files for a dissertation on \emph{information and noise in stock prices}. The project studies whether ESG-related information, and later narrative exposure measures, are associated with changes in the information content of stock prices. The core empirical strategy is a variance decomposition of daily stock returns into information and noise components, followed by firm-year panel regressions with fixed effects.
+
+The folder is organized into four main parts. \texttt{Data/} contains the raw input files used by the scripts, especially the Bloomberg workbook \texttt{data.xlsx} and the benchmark file \texttt{BigSmall_NYA.xlsx}. \texttt{Scripts/} contains the Python pipeline for parsing data, estimating the variance decomposition, constructing the panel, and running the regressions. \texttt{Outputs/} stores the generated tables, figures, and short markdown reports. The root folder also contains the proposal and bibliography notes that frame the dissertation.
+
+\section*{A. Research Question}
+The dissertation asks how ESG-related information affects the informativeness of stock prices. More specifically, the thesis studies whether firms with higher ESG scores, or stronger ESG-related narrative exposure, display a different decomposition of return variance between market information, firm-specific information, and noise.
+
+The current empirical work focuses on two related specifications. The first uses a three-component decomposition, where return variance is split into market information, firm-specific information, and noise. The second uses an extended four-component version that separates firm information into private and public information. In both cases, the final outcome variables are annual firm-level shares of total return variance.
+
+The main empirical pipeline is already implemented in \texttt{Scripts/essay1\_panel\_pipeline.py}. It parses the Bloomberg workbook, constructs a yearly panel, merges ESG and firm controls, and estimates fixed-effects regressions of the form
+\[
+Y_{it} = \alpha + \beta \, ESG_{it} + \gamma X_{it} + \mu_i + \lambda_t + \varepsilon_{it},
+\]
+where $Y_{it}$ is a price-informativeness outcome, $ESG_{it}$ is the yearly ESG score, $X_{it}$ contains firm controls, and $\mu_i$ and $\lambda_t$ are firm and year fixed effects.
+
+\section*{B. Brief Literature Review}
+The methodological core of the dissertation is the variance decomposition in Brogaard, Nguyen, Putni\c{s}, and Wu (2022), \emph{What Moves Stock Prices? The Roles of News, Noise, and Information}. This paper provides the main framework for splitting return variance into information and noise components. It is the direct foundation for the scripts \texttt{Thesis\_2.py} and \texttt{Thesis\_3\_core.py}.
+
+A second relevant reference is Hassan et al. (2019), which shows how textual data can be used to build firm-level exposure measures from earnings-call language. That literature motivates the narrative-exposure scripts in this project, especially the ESG dictionary-based measure and the FinBERT-ESG prototype.
+
+A third important reference is Dim, Sangiorgi, and Vilkov (2023), \emph{Media Narratives and Price Informativeness}. This paper is useful because it links narratives to the informativeness of prices and supports the idea that narrative attention can affect how much firm-specific information is impounded into returns.
+
+A fourth useful reference is Pastor, Stambaugh, and Taylor (2022) on ESG and asset pricing. Their work provides the broader ESG-finance context for why ESG scores might matter in the cross-section of firms and in the information environment.
+
+\section*{C. Data and Empirical Work}
+The project is empirical and uses several datasets already present in the \texttt{Thesis} folder.
+
+The main dataset for Essay I is the Bloomberg workbook \texttt{Data/data.xlsx}. The code expects a daily sheet and a quarterly sheet. The daily sheet contains stock prices, volumes, and a market index, while the quarterly sheet contains ESG scores and firm controls. The current pipeline uses these fields to build a firm-year panel with the following variables: ESG score, log market capitalization, leverage, analyst coverage, book-to-market proxy, and industry identifier.
+
+A second workbook, \texttt{Data/BigSmall\_NYA.xlsx}, is used as a benchmark dataset for the variance decomposition scripts. It helped validate the implementation of the decomposition logic and is associated with the output folders \texttt{Outputs/thesis\_2\_outputs/} and \texttt{Outputs/thesis\_3\_outputs/}.
+
+The project also contains a test folder of earnings-call PDFs in \texttt{Data/Earning Calls\_test/}. These files are used to build prototype narrative exposure measures. Two approaches are already implemented: a simple ESG--risk co-occurrence index and a FinBERT-ESG based sentence classification procedure. Their outputs are saved in \texttt{Outputs/esg\_narrative\_test/} and \texttt{Outputs/finbert\_esg\_test/}.
+
+The current stage of the empirical work is therefore past the data-construction phase for the main panel analysis. The decomposition pipeline runs end-to-end and produces output tables and figures, so the project already has enough structure to support a first empirical draft.
+
+\section*{D. Main Problems and Setbacks}
+The main difficulty so far has been data engineering. Bloomberg Excel exports use two-row headers and mixed formatting, so the parsing code had to be made robust to dates, blank header cells, and missing observations. This is handled in \texttt{Scripts/data\_interface.py}, but it remains a sensitive part of the workflow.
+
+A second issue is that the variance decomposition is estimation-heavy and can fail for some stock-years because of non-stationarity, negative implied variances, or too few observations. The code therefore applies filters and diagnostics, which reduce the usable sample in some years. This is especially relevant in the four-component version of the decomposition.
+
+A third issue is interpretation of the ESG variable. Bloomberg ESG scores are industry-specific and not automatically comparable across peer groups. This raises a specification choice: whether to use the raw score, a zero-centered peer-relative score, or a fixed-effects specification that relies on within-firm variation. The project currently uses the raw score and firm fixed effects, but this remains an important robustness and interpretation question.
+
+Finally, the narrative-exposure measures are still in prototype form. They work on a test transcript set, but they are not yet fully integrated into the main firm-year panel used for the regression analysis. This is the main next step if the dissertation keeps the narrative channel as a central part of Essay I.
+
+\section*{Current Status}
+The project is in a good intermediate state. The decomposition framework is implemented, the ESG panel pipeline works, and the outputs already include regression tables and figures for both the three-component and four-component versions. The next stage is to refine the interpretation of the ESG variable, finalize the literature positioning, and decide how prominently the narrative exposure measures will enter the final thesis design.
+
+\end{document}
