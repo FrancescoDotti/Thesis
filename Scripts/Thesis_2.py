@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from statsmodels.tsa.api import VAR
+from data_interface import read_bloomberg_two_row_sheet, split_price_volume
 
 warnings.filterwarnings('ignore')
 
@@ -32,7 +33,7 @@ WINSOR_BOUNDS = (0.05, 0.95)
 RETURN_SCALE = 10000
 
 
-def run_thesis2_from_daily_panel(daily_df, n_lags=5, winsor_bounds=WINSOR_BOUNDS):
+def run_thesis2_from_daily_panel(daily_df, winsor_bounds=WINSOR_BOUNDS):
     """
     Run Thesis_2 decomposition from a canonical daily panel.
 
@@ -81,7 +82,6 @@ def run_thesis2_from_daily_panel(daily_df, n_lags=5, winsor_bounds=WINSOR_BOUNDS
                 market_ret=market_ret,
                 stock_ret=stock_ret,
                 stock_name=stock,
-                n_lags=n_lags,
             )
 
             if result is not None:
@@ -115,85 +115,35 @@ def run_thesis2_from_daily_panel(daily_df, n_lags=5, winsor_bounds=WINSOR_BOUNDS
     }
 
 
-def load_data(data_path="./Data/BigSmall_NYA.xlsx"):
+def load_data():
     """
-    Load stock data from Excel file.
-    
-    Parameters
-    ----------
-    data_path : str
-        Path to BigSmall_NYA.xlsx file
-        
+    Load stock data from data.xlsx daily_ sheet.
+
     Returns
     -------
     dict with 'prices', 'volume', 'market_ret', 'index'
     """
-    
-    data_path = Path(data_path)
-    if not data_path.is_absolute():
-        data_path = DATA_DIR / data_path.name
 
-    # Read the Excel file
-    raw = pd.read_excel(data_path, sheet_name="BigCap")
-    index_name = 'NYA Index'
-    
-    # Parse dates and set as index
-    raw1 = raw.rename(columns={'Unnamed: 0': 'Date'})
-    dates = pd.to_datetime(raw1['Date'].iloc[1:])
-    
-    raw1 = raw1.iloc[1:].copy()
-    raw1['Date'] = dates
-    raw1 = raw1.set_index('Date')
-    
-    # Get second header row for field names (PRICE, VOLUME)
-    second_header = raw.iloc[0]
-    
-    data = raw1.copy()
-    
-    # Build MultiIndex for columns: (ticker, field)
-    tuples = []
-    for col in data.columns:
-        field = second_header[col]
-        ticker = col
-        if col.startswith('Unnamed:'):
-            idx = data.columns.get_loc(col)
-            ticker = data.columns[idx - 1]
-        tuples.append((ticker, field))
-    
-    multi_cols = pd.MultiIndex.from_tuples(tuples, names=['Ticker', 'Field'])
-    data.columns = multi_cols
-    
-    # Extract PRICE and VOLUME data
-    prices = data.xs('PRICE', axis=1, level='Field')
-    volume = data.xs('VOLUME', axis=1, level='Field')
-    market = prices[[index_name]].copy()
-    
-    # Apply date range filter
-    start_date = '1997-01-01'
-    end_date = '2015-12-31'
-    date_mask = (prices.index >= start_date) & (prices.index <= end_date)
-    
-    prices = prices.loc[date_mask]
-    volume = volume.loc[date_mask]
-    market = market.loc[date_mask]
-    
-    # Handle missing values
-    prices = prices.ffill(limit=5)
-    volume = volume.ffill(limit=5)
-    market = market.ffill(limit=5)
-    
-    # Calculate market returns
-    market_ret = market[index_name].pct_change(fill_method=None)
-    
+    file_path = DATA_DIR / 'data.xlsx'
+    index_name = 'SXXP Index'
+
+    raw = read_bloomberg_two_row_sheet(file_path, sheet_name='daily_')
+    parts = split_price_volume(raw)
+
+    prices = parts['prices'].ffill(limit=5)
+    volume = parts['volume'].ffill(limit=5)
+
+    market_ret = prices[index_name].pct_change(fill_method=None)
+
     return {
         'prices': prices,
         'volume': volume,
         'market_ret': market_ret,
-        'index': index_name
+        'index': index_name,
     }
 
 
-def decompose_variance_single_period(market_ret, stock_ret, stock_name, n_lags=5):
+def decompose_variance_single_period(market_ret, stock_ret, stock_name):
     """
     Decompose variance of a single stock in a single period using VAR.
     
@@ -208,9 +158,6 @@ def decompose_variance_single_period(market_ret, stock_ret, stock_name, n_lags=5
         Stock returns for the period
     stock_name : str
         Name/ticker of the stock
-    n_lags : int
-        Number of lags in VAR model
-        
     Returns
     -------
     dict with variance decomposition results or None if estimation fails
@@ -229,13 +176,13 @@ def decompose_variance_single_period(market_ret, stock_ret, stock_name, n_lags=5
         q_high = var_data[col].quantile(WINSOR_BOUNDS[1])
         var_data[col] = var_data[col].clip(lower=q_low, upper=q_high)
     
-    if len(var_data) < max(20, 2 * n_lags + 5):
+    if len(var_data) < 20:
         return None
     
     try:
         # Estimate reduced-form VAR
         var_model = VAR(var_data)
-        var_result = var_model.fit(maxlags=n_lags, trend='c')
+        var_result = var_model.fit(maxlags=5, trend='c')
         
     except Exception as e:
         return None
@@ -304,32 +251,14 @@ def decompose_variance_single_period(market_ret, stock_ret, stock_name, n_lags=5
     MktInfo = theta_market**2 * sigma2_eps_market
     FirmInfo = theta_stock**2 * sigma2_eps_stock
     
-    # Noise is calculated as RESIDUAL unexplained variance (following Thesis_2.ipynb)
-    # This is the key difference from component-based decomposition
-    
-    # Get constant term from VAR (drift)
-    a0 = var_result.params.iloc[0, 1]
-    
-    # Structural shocks (inverted from reduced form)
-    eps_market = e_market
-    eps_stock = e_stock - b10 * e_market
-    
-    # Fitted information component
-    fitted_info_return = theta_market * eps_market + theta_stock * eps_stock
-    
-    # Actual returns (aligned with residuals, after n_lags observations)
+    # Noise = total return variance minus permanent (information) variance.
+    # Brogaard et al. (2022): Noise = Var(r) - sum_k theta_k^2 * sigma2_eps_k
     actual_returns = var_data['stock_ret'].iloc[used_lags:].values
-    
-    # Alignment check
-    if len(actual_returns) != len(fitted_info_return):
-        return None
-    
-    # Noise = unexplained variance after fitting information model
-    noise_returns = actual_returns - a0 - fitted_info_return
-    Noise = np.var(noise_returns, ddof=1)
-    
-    if Noise < 0:
-        Noise = 0
+    Noise = max(
+        np.var(actual_returns, ddof=1)
+        - (theta_market**2 * sigma2_eps_market + theta_stock**2 * sigma2_eps_stock),
+        0,
+    )
     
     # Total variance
     TotalVar = MktInfo + FirmInfo + Noise
@@ -361,10 +290,10 @@ def decompose_variance_single_period(market_ret, stock_ret, stock_name, n_lags=5
     }
 
 
-def decompose_all_stocks_period(market_ret, stock_prices, period_label, n_lags=5):
+def decompose_all_stocks_period(market_ret, stock_prices, period_label):
     """
     Decompose variance for all stocks in a given period.
-    
+
     Parameters
     ----------
     market_ret : pd.Series
@@ -373,9 +302,7 @@ def decompose_all_stocks_period(market_ret, stock_prices, period_label, n_lags=5
         Stock prices for the period (columns = tickers)
     period_label : str
         Label for the period (e.g., '2000')
-    n_lags : int
-        Number of lags in VAR model
-        
+
     Returns
     -------
     pd.DataFrame with variance decomposition for all stocks
@@ -397,7 +324,6 @@ def decompose_all_stocks_period(market_ret, stock_prices, period_label, n_lags=5
                 market_ret,
                 stock_ret[ticker],
                 ticker,
-                n_lags=n_lags
             )
             
             if result is not None:
@@ -569,8 +495,7 @@ def main():
     # 1. Load data
     # ========================================
     print("\n1. Loading data...")
-    # Always rebuild from the same raw input file so this script matches Thesis_3.py.
-    data = load_data(data_path=DATA_DIR / 'BigSmall_NYA.xlsx')
+    data = load_data()
     
     prices = data['prices']
     market_ret = data['market_ret']
@@ -601,7 +526,6 @@ def main():
             year_market,
             year_prices,
             str(year),
-            n_lags=5
         )
         
         if year_results is not None:

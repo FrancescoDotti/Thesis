@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.api import VAR
+from data_interface import read_bloomberg_two_row_sheet, split_price_volume
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -43,57 +44,15 @@ OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 # In[ ]:
 
 
-# Always read the same raw input file used by Thesis_2.py.
-file_path = DATA_DIR / "BigSmall_NYA.xlsx"
-raw = pd.read_excel(file_path, sheet_name="BigCap")
-index = 'NYA Index'
+# Load data from data.xlsx daily_ sheet using the shared data_interface.
+file_path = DATA_DIR / 'data.xlsx'
+index = 'SXXP Index'
 
-# Parse dates and set them as the index before processing the table.
-raw1 = raw.rename(columns={'Unnamed: 0': 'Date'})
-dates = pd.to_datetime(raw1['Date'].iloc[1:])
-
-raw1 = raw1.iloc[1:].copy()
-raw1['Date'] = dates
-raw1 = raw1.set_index('Date')
-
-# Read the second header row so each column can be tagged as PRICE or VOLUME.
-second_header = raw.iloc[0]
-data = raw1.copy()
-
-# Build a MultiIndex for columns: (ticker, field).
-arrays = []
-for col in data.columns:
-    field = second_header[col]
-    ticker = col
-    if col.startswith('Unnamed:'):
-        idx = data.columns.get_loc(col)
-        ticker = data.columns[idx - 1]
-    arrays.append((ticker, field))
-
-tuples = [(ticker, field) for ticker, field in arrays]
-multi_cols = pd.MultiIndex.from_tuples(tuples, names=['Ticker', 'Field'])
-data.columns = multi_cols
-
-# Split the table into prices and volumes.
-prices = data.xs('PRICE', axis=1, level='Field')
-volume = data.xs('VOLUME', axis=1, level='Field')
-market = prices[[index]].copy()
-
-# Keep the same sample window as the script version.
-start_date = '1997-01-01'
-end_date = '2015-12-31'
-date_mask = (prices.index >= start_date) & (prices.index <= end_date)
-prices = prices.loc[date_mask]
-volume = volume.loc[date_mask]
-market = market.loc[date_mask]
-
-# Fill short gaps so returns and volume can be computed consistently.
-prices = prices.ffill(limit=5)
-volume = volume.ffill(limit=5)
-market = market.ffill(limit=5)
-
-# Compute the market return series used later in the notebook.
-market_ret = market[index].pct_change(fill_method=None)
+raw = read_bloomberg_two_row_sheet(file_path, sheet_name='daily_')
+parts = split_price_volume(raw)
+prices = parts['prices'].ffill(limit=5)
+volume = parts['volume'].ffill(limit=5)
+market_ret = prices[index].pct_change(fill_method=None)
 
 print(f"Data loaded from {file_path}")
 
@@ -147,7 +106,7 @@ print(f"\nFirst few rows:\n{df.head()}")
 
 def decompose_variance_single_stock(df_stock, market_ret_col='rm',
                                    stock_ret_col='r', volume_col='volume',
-                                   price_col='price', n_lags=5):
+                                   price_col='price'):
     """
     Decompose variance for a single stock-year following Brogaard et al. (2022).
 
@@ -180,7 +139,7 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
     # ========================================
     try:
         var_model = VAR(var_data)
-        var_result = var_model.fit(maxlags=n_lags, trend='c')
+        var_result = var_model.fit(maxlags=5, trend='c')
     except:
         return None
 
@@ -285,20 +244,14 @@ def decompose_variance_single_stock(df_stock, market_ret_col='rm',
     eps_x = e_x.values - b10 * e_rm.values
     eps_r = e_r.values - c10 * e_rm.values - c20 * e_x.values
 
-    # Calculate noise from structural information model fit.
-    a0 = var_result.params.iloc[0, 2]  # Constant from return equation (drift)
-    fitted_info_return = theta_rm * eps_rm + theta_x * eps_x + theta_r * eps_r
-
+    # Noise = total return variance minus permanent (information) variance.
+    # Brogaard et al. (2022): Noise = Var(r) - sum_k theta_k^2 * sigma2_eps_k
     actual_returns = var_data[stock_ret_col].iloc[used_lags:].values
-    if len(actual_returns) != len(fitted_info_return):
-        return None
-
-    noise_returns = actual_returns - a0 - fitted_info_return
-    sigma2_s = np.var(noise_returns, ddof=1)
-
-    # Ensure non-negative noise variance
-    if sigma2_s < 0:
-        sigma2_s = 0
+    sigma2_s = max(
+        np.var(actual_returns, ddof=1)
+        - (theta_rm**2 * sigma2_eps_rm + theta_x**2 * sigma2_eps_x + theta_r**2 * sigma2_eps_r),
+        0,
+    )
 
     return {
         'MktInfo': MktInfo,

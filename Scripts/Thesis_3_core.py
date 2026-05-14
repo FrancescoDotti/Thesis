@@ -23,7 +23,6 @@ def decompose_variance_single_stock(
     stock_ret_col="r",
     volume_col="volume",
     price_col="price",
-    n_lags=5,
 ):
     """Decompose one stock-year into 4 variance components."""
 
@@ -50,7 +49,7 @@ def decompose_variance_single_stock(
         return None
 
     try:
-        var_result = VAR(var_data).fit(maxlags=n_lags, trend="c")
+        var_result = VAR(var_data).fit(maxlags=5, trend="c")
     except Exception:
         return None
 
@@ -117,20 +116,15 @@ def decompose_variance_single_stock(
     private_info = theta_x**2 * sigma2_eps_x
     public_info = theta_r**2 * sigma2_eps_r
 
-    # Noise from residual model fit.
-    eps_rm = e_rm.values
-    eps_x = e_x.values - b10 * e_rm.values
-    eps_r = e_r.values - c10 * e_rm.values - c20 * e_x.values
-
-    a0 = var_result.params.iloc[0, 2]
-    fitted_info_return = theta_rm * eps_rm + theta_x * eps_x + theta_r * eps_r
-
+    # Noise = total return variance minus permanent (information) variance.
+    # Brogaard et al. (2022): Noise = Var(r) - sum_k theta_k^2 * sigma2_eps_k
+    # where theta_k is the long-run cumulative impact of structural shock k on r.
     actual_returns = var_data[stock_ret_col].iloc[used_lags:].values
-    if len(actual_returns) != len(fitted_info_return):
-        return None
-
-    noise_returns = actual_returns - a0 - fitted_info_return
-    noise = max(np.var(noise_returns, ddof=1), 0)
+    noise = max(
+        np.var(actual_returns, ddof=1)
+        - (theta_rm**2 * sigma2_eps_rm + theta_x**2 * sigma2_eps_x + theta_r**2 * sigma2_eps_r),
+        0,
+    )
 
     return {
         "MktInfo": mkt_info,
