@@ -29,7 +29,7 @@ MIN_VALID_OBS = 20
 # maxlags=5 (used for annual data with ~250 obs) causes explosive VAR estimates on
 # quarterly windows (~65 obs) in low-volatility regimes. maxlags=2 keeps the
 # observations-to-parameters ratio comparable to the annual specification.
-MAX_LAGS = 3
+MAX_LAGS = 1
 
 
 def run_thesis2_quarterly_from_daily_panel(daily_df, winsor_bounds=WINSOR_BOUNDS):
