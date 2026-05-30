@@ -26,9 +26,9 @@ OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 WINSOR_BOUNDS = (0.05, 0.95)
 RETURN_SCALE = 10000
 MIN_VALID_OBS = 20
-# maxlags=5 (used for annual data with ~250 obs) causes explosive VAR estimates on
-# quarterly windows (~65 obs) in low-volatility regimes. maxlags=2 keeps the
-# observations-to-parameters ratio comparable to the annual specification.
+# maxlags=5 (used for annual VAR) causes explosive VAR estimates. 
+# maxlags=2 keeps the observations-to-parameters ratio comparable to the annual specification.
+# AIC advises <1 lag, so max_lags=1 is a conservative choice.
 MAX_LAGS = 1
 
 
