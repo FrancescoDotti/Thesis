@@ -20,10 +20,17 @@
 !Data/**/*.xlsx
 !Data/**/*.xlsm
 
+# Exclude the Latex/ folder entirely
+Latex/
+
 # Keep PDF and LaTeX source files in the project root or subfolders
 !*.pdf
 !*.tex
 !*.bib
 !*.cls
 !*.sty
+
+# Exclude administrative/cover documents (must come after the !*.pdf rule)
+Thesis_Vademecum.pdf
+ESL-ESN-Thesis Cover UNIMI.docx
 
