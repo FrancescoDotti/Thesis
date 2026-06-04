@@ -23,7 +23,8 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_DIR / "Data"
 OUTPUTS_DIR = PROJECT_DIR / "Outputs" / "thesis_2_quarterly_outputs"
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
-WINSOR_BOUNDS = (0.05, 0.95)
+WINSOR_BOUNDS_INPUTS     = (0.05, 0.95)  # applied to returns before VAR (quarterly adaptation)
+WINSOR_BOUNDS_COMPONENTS = (0.01, 0.99)  # applied to variance components after estimation (BNPW baseline)
 RETURN_SCALE = 10000
 MIN_VALID_OBS = 20
 # maxlags=5 (used for annual VAR) causes explosive VAR estimates. 
@@ -32,7 +33,7 @@ MIN_VALID_OBS = 20
 MAX_LAGS = 1
 
 
-def run_thesis2_quarterly_from_daily_panel(daily_df, winsor_bounds=WINSOR_BOUNDS):
+def run_thesis2_quarterly_from_daily_panel(daily_df, winsor_bounds=WINSOR_BOUNDS_COMPONENTS):
     """
     Run quarterly Thesis_2 decomposition from a canonical daily panel.
 
@@ -140,8 +141,8 @@ def decompose_variance_single_period(market_ret, stock_ret, stock_name):
     ).dropna()
 
     for col in ["market_ret", "stock_ret"]:
-        q_low = var_data[col].quantile(WINSOR_BOUNDS[0])
-        q_high = var_data[col].quantile(WINSOR_BOUNDS[1])
+        q_low = var_data[col].quantile(WINSOR_BOUNDS_INPUTS[0])
+        q_high = var_data[col].quantile(WINSOR_BOUNDS_INPUTS[1])
         var_data[col] = var_data[col].clip(lower=q_low, upper=q_high)
 
     if len(var_data) < MIN_VALID_OBS:
@@ -199,11 +200,14 @@ def decompose_variance_single_period(market_ret, stock_ret, stock_name):
     FirmInfo = theta_stock**2 * sigma2_eps_stock
 
     actual_returns = var_data["stock_ret"].iloc[used_lags:].values
-    Noise = max(
-        np.var(actual_returns, ddof=1)
-        - (theta_market**2 * sigma2_eps_market + theta_stock**2 * sigma2_eps_stock),
-        0,
-    )
+
+    # Noise: Beveridge-Nelson method — Var(Δs_t) where Δs_t = r_t - w_t
+    # (matches BNPW eq. 9; drift omitted as it is a constant and doesn't affect variance)
+    eps_market_series = e_market                        # market shock is already structural
+    eps_stock_series  = e_stock - b10 * e_market        # partial out market component
+    w_t     = theta_market * eps_market_series + theta_stock * eps_stock_series
+    delta_s = actual_returns - w_t
+    Noise   = np.var(delta_s, ddof=1)
 
     TotalVar = MktInfo + FirmInfo + Noise
     if TotalVar <= 0:
@@ -333,7 +337,7 @@ def main():
     print("QUARTERLY VARIANCE DECOMPOSITION: What Moves Stock Prices")
     print("=" * 80)
     print("\nMethodology: Brogaard, Nguyen, Putnins & Wu (2022)")
-    print(f"Winsorization: Components at {int(WINSOR_BOUNDS[0]*100)}%-{int(WINSOR_BOUNDS[1]*100)}% (before calculating shares)")
+    print(f"Winsorization: Components at {int(WINSOR_BOUNDS_COMPONENTS[0]*100)}%-{int(WINSOR_BOUNDS_COMPONENTS[1]*100)}% (before calculating shares)")
     print("Frequency: Quarterly")
     print("=" * 80)
 
@@ -378,7 +382,7 @@ def main():
     results_df = pd.concat(all_results, ignore_index=True)
     print(f"\n   Total stock-quarter observations: {len(results_df)}")
 
-    print(f"\n3. Winsorizing variance components at {int(WINSOR_BOUNDS[0]*100)}%-{int(WINSOR_BOUNDS[1]*100)}% bounds...")
+    print(f"\n3. Winsorizing variance components at {int(WINSOR_BOUNDS_COMPONENTS[0]*100)}%-{int(WINSOR_BOUNDS_COMPONENTS[1]*100)}% bounds...")
 
     component_cols = ["MktInfo", "FirmInfo", "Noise"]
     results_df = winsorize_by_period(results_df, component_cols, bounds=WINSOR_BOUNDS)
@@ -527,7 +531,7 @@ def main():
         f.write("=" * 80 + "\n\n")
         f.write(
             f"WINSORIZATION: Variance components at "
-            f"{int(WINSOR_BOUNDS[0]*100)}%-{int(WINSOR_BOUNDS[1]*100)}% "
+            f"{int(WINSOR_BOUNDS_COMPONENTS[0]*100)}%-{int(WINSOR_BOUNDS_COMPONENTS[1]*100)}% "
             f"(before calculating shares)\n\n"
         )
         f.write("VARIANCE-WEIGHTED RESULTS\n")
