@@ -15,6 +15,7 @@ import pandas as pd
 from statsmodels.tsa.api import VAR
 
 from data_interface import read_bloomberg_two_row_sheet, split_price_volume
+import thesis_style
 
 warnings.filterwarnings("ignore")
 
@@ -448,8 +449,10 @@ def main():
     tick_positions = [i for i, p in enumerate(period_labels) if p.endswith("Q1")]
     tick_labels = [p[:4] for p in period_labels if p.endswith("Q1")]
 
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    thesis_style.apply()
+    colors = thesis_style.SHARE_COLORS_LIST
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10),
+                             facecolor=thesis_style.SOLARIZED["base3"])
 
     # Plot 1: VW time series
     ax = axes[0, 0]

@@ -38,6 +38,7 @@ import pandas as pd
 from statsmodels.tsa.api import VAR
 
 from data_interface import read_bloomberg_two_row_sheet, split_price_volume
+import thesis_style
 
 warnings.filterwarnings("ignore")
 
@@ -331,14 +332,16 @@ def plot_timeseries(EW, VW, save_path):
     tick_positions = [i for i, p in enumerate(period_labels) if p.endswith("Q1")]
     tick_labels = [p[:4] for p in period_labels if p.endswith("Q1")]
 
-    fig, axes = plt.subplots(2, 1, figsize=(13, 8), sharex=True)
+    thesis_style.apply()
+    fig, axes = plt.subplots(2, 1, figsize=(13, 8), sharex=True,
+                             facecolor=thesis_style.SOLARIZED["base3"])
 
     # Panel 1 — Equal-weighted
     ax = axes[0]
     ax.plot(x, EW["NoiseShare_A"], label="Method A — residual: $\\mathrm{Var}(r) - \\mathrm{MktInfo} - \\mathrm{FirmInfo}$",
-            linewidth=1.8, color="#1f77b4")
+            linewidth=1.8, color=thesis_style.SOLARIZED["blue"])
     ax.plot(x, EW["NoiseShare_B"], label="Method B — Beveridge–Nelson: $\\mathrm{Var}(\\Delta s_t)$",
-            linewidth=1.8, color="#d62728", linestyle="--")
+            linewidth=1.8, color=thesis_style.SOLARIZED["red"], linestyle="--")
     ax.set_ylabel("Noise share (%)", fontsize=11)
     ax.set_title("Equal-weighted noise share across STOXX 600 (quarterly)",
                  fontsize=12, fontweight="bold")
@@ -348,9 +351,9 @@ def plot_timeseries(EW, VW, save_path):
     # Panel 2 — Variance-weighted
     ax = axes[1]
     ax.plot(x, VW["NoiseShare_A"], label="Method A — residual",
-            linewidth=1.8, color="#1f77b4")
+            linewidth=1.8, color=thesis_style.SOLARIZED["blue"])
     ax.plot(x, VW["NoiseShare_B"], label="Method B — Beveridge–Nelson",
-            linewidth=1.8, color="#d62728", linestyle="--")
+            linewidth=1.8, color=thesis_style.SOLARIZED["red"], linestyle="--")
     ax.set_xticks(tick_positions)
     ax.set_xticklabels(tick_labels)
     ax.set_xlabel("Year", fontsize=11)
@@ -372,13 +375,14 @@ def plot_scatter(results_df, save_path):
     if len(df) == 0:
         return
 
-    fig, ax = plt.subplots(figsize=(7, 7))
+    thesis_style.apply()
+    fig, ax = plt.subplots(figsize=(7, 7), facecolor=thesis_style.SOLARIZED["base3"])
     ax.scatter(df["NoiseShare_A"], df["NoiseShare_B"],
-               s=6, alpha=0.25, color="#1a5276", edgecolors="none")
+               s=6, alpha=0.35, color=thesis_style.SOLARIZED["blue"], edgecolors="none")
 
     lo = min(df["NoiseShare_A"].min(), df["NoiseShare_B"].min())
     hi = max(df["NoiseShare_A"].max(), df["NoiseShare_B"].max())
-    ax.plot([lo, hi], [lo, hi], color="black", linestyle=":", linewidth=1, label="45° line")
+    ax.plot([lo, hi], [lo, hi], color=thesis_style.SOLARIZED["base00"], linestyle=":", linewidth=1, label="45° line")
 
     corr = df[["NoiseShare_A", "NoiseShare_B"]].corr().iloc[0, 1]
     ax.set_xlabel("Noise share — Method A (residual, %)", fontsize=11)
