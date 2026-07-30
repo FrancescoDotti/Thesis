@@ -28,10 +28,8 @@ WINSOR_BOUNDS_INPUTS     = (0.05, 0.95)  # applied to returns before VAR (quarte
 WINSOR_BOUNDS_COMPONENTS = (0.01, 0.99)  # applied to variance components after estimation (BNPW baseline)
 RETURN_SCALE = 10000
 MIN_VALID_OBS = 20
-# maxlags=5 (used for annual VAR) causes explosive VAR estimates. 
-# maxlags=2 keeps the observations-to-parameters ratio comparable to the annual specification.
-# AIC advises <1 lag, so max_lags=1 is a conservative choice.
-MAX_LAGS = 1
+# Use the requested 5-lag VAR specification for the quarterly run.
+MAX_LAGS = 5
 
 
 def run_thesis2_quarterly_from_daily_panel(daily_df, winsor_bounds=WINSOR_BOUNDS_COMPONENTS):
@@ -386,7 +384,7 @@ def main():
     print(f"\n3. Winsorizing variance components at {int(WINSOR_BOUNDS_COMPONENTS[0]*100)}%-{int(WINSOR_BOUNDS_COMPONENTS[1]*100)}% bounds...")
 
     component_cols = ["MktInfo", "FirmInfo", "Noise"]
-    results_df = winsorize_by_period(results_df, component_cols, bounds=WINSOR_BOUNDS)
+    results_df = winsorize_by_period(results_df, component_cols, bounds=WINSOR_BOUNDS_COMPONENTS)
 
     print("\n4. Aggregating results...")
 
