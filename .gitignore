@@ -20,9 +20,6 @@
 !Data/**/*.xlsx
 !Data/**/*.xlsm
 
-# Exclude the Latex/ folder entirely
-Latex/
-
 # Keep PDF and LaTeX source files in the project root or subfolders
 !*.pdf
 !*.tex
@@ -33,4 +30,14 @@ Latex/
 # Exclude administrative/cover documents (must come after the !*.pdf rule)
 Thesis_Vademecum.pdf
 ESL-ESN-Thesis Cover UNIMI.docx
+
+# Exclude everything inside Latex/ (sources, build artifacts, figures)
+# except the compiled PDF, which is the only thing we sync from there.
+# Must come after the generic !*.tex/!*.bib rules above so it wins (last
+# matching pattern takes precedence), and must un-ignore the directory
+# itself first, same as !Data/ and !Scripts/ above, or git never
+# traverses into it to see the rules below.
+!Latex/
+Latex/*
+!Latex/main.pdf
 
